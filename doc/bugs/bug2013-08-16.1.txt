@@ -1,0 +1,15 @@
+2013-08-16.1 Stuck input key
+----------------------------
+
+Status : [**Bug**, Fixing, Fixed, CNR] 
+
+Description
+:   A key can get stuck.  This was seen a few times when first starting the game.  Try
+    hitting random keys and/or Esc during startup and the first animation sequence. 
+    Doesn't happen consistently.
+
+	This happens on windows.  The current circular buffer implementation can cause an
+	event to get dropped.  If it is a key up then the key will be considered down.  The
+	workaround is to press the stuck key again.
+Expected Behaviour
+:   Keys should not get stuck. 

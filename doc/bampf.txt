@@ -1,13 +1,16 @@
-bampf
+<!-- Copyright © 2013 Galvanized Logic Inc. -->
+<!-- Use is governed by a FreeBSD license found in the LICENSE file. -->
+
+Bampf
 =====
 
 Bampf is a simple 3D arcade style game. Collect energy cores in order to finish 
 a level. Teleport (bampf) to safety or use cloaking abilities to avoid sentinels.
 
-Bampf was created primarily to test the ``vu`` engine.  Its levels are used to 
-benchmark the engine by substantially upping the number-of-triangles-rendered each level.  
-As such the game isn't really meant to be winnable given the silly number of AI's in the 
-later levels. 
+Bampf was created primarily to test the ``vu`` engine.  Its levels are used to
+benchmark the engine by substantially upping the number-of-triangles-rendered each level.
+As such the game isn't really meant to be winnable given the silly number of AI's in the
+later levels.
 
 Build
 -----
@@ -50,3 +53,36 @@ Limitations
   (http://connect.creativelabs.com/openal/Downloads/oalinst.zip if/when their website is up).
 * Windows building has only been done using golang with gcc from mingw64-bit. 
   Building with Cygwin may have special needs. 
+
+Change Requests
+---------------
+
+Users have requested features/changes.  The ones that are not yet (and might not be) 
+implemented are tracked here along with the number of the requesting users.
+
+* Keep track of 'best time completed maze level'  -> want to repeat same level again. (1)
+
+* Have some indication that the sentinel is 'really' nearby i.e. in the same corridor/crossroad. 
+  Not if it's in a parallel corridor only if "can get me". (2)
+
+* Limit the up/down range of motion for this game -> limited advantages of having full 90 
+  degree movement at this time. (1)
+
+* AoE bomb to kill nasty sentinels... (1)
+
+* Sentinel in outside corridor are hard to differentiate between ‘behind’ white wall and 
+  ‘in front’ from a distance (1)
+
+* Cloak on/off is not obvious. Thought cloak was timer based (1)
+
+* Save game with # of balls left and same maps. (1)
+
+* L3/L4/L5. Sentinels too fast and too many. Difficulty rises unbounded exponentially. 
+  Limited strategy possible. (1)
+
+* Make the sentinel hit box a bit smaller (1)
+
+* Add a 3-5s delay before respawning a sentinel (avoid corner of dealth) (2)
+
+* Slightly decrease sentinels but increase the penalty of being hit each time
+  you are hit on a level (1) 

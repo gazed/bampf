@@ -1,0 +1,22 @@
+2013-07-23.1 Start button overlaps window trim. 
+-----------------------------------------------
+
+Status : [**Bug**, Fixing, Fixed, CNR] 
+
+Description
+:   Resizing the window such that the start button overlaps the window trim
+    can cause the game to start as if the user moves the window by clicking
+    on the window trim.  This can also happen if the box overlaps one of the
+    windows corners and the user attempts to resize the window. 
+
+    Need to test if this happens on Windows.
+
+    One solution is to limit the window size so that it can't be made so small
+    that the overlap happens.
+       On OSX : NSWindow setContentMinSize
+       On Win : Respond to WindowProc WM_GETMINMAXINFO
+    However limiting the user's window size is out of proportion with the
+    seriousness of the bug. 
+
+Expected Behaviour
+:   The window border should take precendence over the game button. 

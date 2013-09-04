@@ -1,0 +1,39 @@
+#! /usr/bin/python
+# Copyright (c) 2013 Galvanized Logic Inc.
+# Use is governed by a FreeBSD license found in the LICENSE file.
+
+"""
+Creates a website using pandoc. Pandoc converts the text file (markdown format)
+into html5.  This script combines the html5 output into a single website.
+
+This script is expected to be called by the build script.
+"""
+
+import os           # for file system manipulation.
+import shlex        # run and control shell commands
+import subprocess   # run and control shell commands
+
+def createWebsite():
+	# ensure the output directory exists.
+    dst = '../target/doc/'
+    if not(os.path.exists(dst)):
+        os.makedirs(dst)
+
+    # generate the documents.
+    markdownFiles = ['bampf', 'gameplay']
+    options = '--standalone --smart -f markdown -t html5 --toc --css=res/site.css -B res/sitenav.html --section-divs'
+    for mfile in markdownFiles:
+        subprocess.call(shlex.split('pandoc '+options+' -o '+dst+mfile+'.html '+mfile+'.txt'))
+
+    # copy the dependencies to the output
+    subprocess.call(['cp', '-r', 'res', dst]) 
+
+def refreshBuglist():
+	#generate the project bug list. Assumes output directory exists.
+    dst = '../target/doc/'
+    cmd = 'pandoc --standalone --smart -f markdown -t html5 --section-divs --toc --self-contained --css=res/bugs.css -o '+dst+'bugs.html bugs/bug*.txt'
+    subprocess.call(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+if __name__ == "__main__":
+    createWebsite()
+    refreshBuglist()
