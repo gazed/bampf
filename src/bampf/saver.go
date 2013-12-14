@@ -22,10 +22,10 @@ type Saver struct {
 }
 
 // newSaver creates default persistent application state. The directory is
-// platform specific and expected to be along the lines of:
-//    osx  : /Users/[USER]/Library/Application\ Support/Bampf/bampf.save
-//    win  : C:\Users\[USER]\AppData\Bampf\bampf.save
-//    lin  : TODO
+// platform specific and specified by:
+//    osx  : see saver_darwin.go
+//    win  : see saver_windows.go
+//    lin  : FUTURE
 func newSaver() *Saver {
 	s := &Saver{}
 	s.Kmap = map[string]string{}
@@ -60,7 +60,7 @@ func (s *Saver) persistMute(isMuted bool) {
 	s.persist()
 }
 
-// persist is called to record any user preferences.  This is expected
+// persist is called to record any user preferences. This is expected
 // to be called when a user preference changes.
 func (s *Saver) persist() {
 	data := &bytes.Buffer{}

@@ -10,25 +10,24 @@ import (
 	"math/rand"
 	"time"
 	"vu"
-	"vu/physics"
 )
 
 // coreControl tracks available core drop locations and regulates how fast
 // new cores appear.
 type coreControl struct {
-	cores   []vu.Part     // unattached cores
+	cores   []vu.Part     // cores available to be collected.
 	tiles   []gridSpot    // core drop locations.
 	saved   []gridSpot    // remember the core drop locations for resets.
 	last    time.Time     // last time a core was dropped.
 	holdoff time.Duration // time delay between core drops.
-	units   float32       // eng.Units injected on creation is...
+	units   float64       // eng.Units injected on creation is...
 	spot    *gridSpot     // ...used to translate between grid and game coordinates.
 }
 
 // newCoreControl returns an initialized coreControl structure.
 func newCoreControl(units int) *coreControl {
 	cc := &coreControl{}
-	cc.units = float32(units)
+	cc.units = float64(units)
 	cc.cores = []vu.Part{}
 	cc.saved = []gridSpot{}
 	cc.tiles = []gridSpot{}
@@ -64,7 +63,7 @@ func (cc *coreControl) dropSpot() (gridx, gridy int) {
 
 // dropCore creates a new core. Create it high so that it drops.
 // Return the x, z game location of the dropped core.
-func (cc *coreControl) dropCore(sc vu.Scene, gridx, gridy int) (gamex, gamez float32) {
+func (cc *coreControl) dropCore(sc vu.Scene, gridx, gridy int) (gamex, gamez float64) {
 
 	// remove the dropped spot from the list of available spots.
 	removed := false // sanity check.
@@ -88,9 +87,9 @@ func (cc *coreControl) dropCore(sc vu.Scene, gridx, gridy int) (gamex, gamez flo
 	return
 }
 
-// remCore destroys a dropped core. The drop spot is now available for new
+// remCore destroys the indicated core. The drop spot is now available for new
 // cores. Return the game location of the removed core.
-func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float32) {
+func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float64) {
 	core := cc.cores[index]
 	cc.cores = append(cc.cores[:index], cc.cores[index+1:]...)
 
@@ -107,7 +106,7 @@ func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float32) {
 
 // hitCore returns the core index if the given location is in the same grid location
 // as a core. Return -1 if no core was hit.
-func (cc *coreControl) hitCore(gamex, gamez float32) (coreIndex int) {
+func (cc *coreControl) hitCore(gamex, gamez float64) (coreIndex int) {
 	coreIndex = -1
 	gridx, gridy := cc.playerToGrid(gamex, 0, gamez)
 	for index, core := range cc.cores {
@@ -129,7 +128,8 @@ func (cc *coreControl) addDropLocation(gridx, gridy int) {
 }
 
 // reset puts the core control back to the initial conditions before cores
-// starting dropping.
+// starting dropping. Expected to be called for cleaning up the current
+// level before transitioning to a new level.
 func (cc *coreControl) reset(sc vu.Scene) {
 	for _, core := range cc.cores {
 		core.Dispose()
@@ -145,46 +145,43 @@ func (cc *coreControl) reset(sc vu.Scene) {
 // createCore makes the new core model.
 func (cc *coreControl) createCore(sc vu.Scene) vu.Part {
 	core := sc.AddPart()
-	core.SetBody(10, 100)
-	core.SetShape(physics.Sphere(0, 0, 0, 0.15))
-	core.ResetMomentum()
-	core.SetLinearMomentum(0, 0.2, 0)
+	core.SetBody(vu.Sphere(0.15), 1, 0.8)
 
 	// combine billboards to get an effect with some movement.
 	cimg := core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.25, 0.25, 0.25)
 	cimg.SetTexture("ele", 1.93)
 	cimg.SetCullable(false)
 
 	// same billboard rotating the other way.
 	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.25, 0.25, 0.25)
 	cimg.SetTexture("ele", -1.3)
 	cimg.SetCullable(false)
 
 	// halo billboard rotating one way.
 	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.25, 0.25, 0.25)
 	cimg.SetTexture("halo", -2)
 	cimg.SetCullable(false)
 
 	// halo billboard rotating the other way.
 	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.25, 0.25, 0.25)
 	cimg.SetTexture("halo", 1)
 	cimg.SetCullable(false)
 	return core
 }
 
-// playerToGrid maps to rectangular areas around grid centers.  This is needed for
-// player game locations which might not map exactly to an integer grid location.
-func (cc *coreControl) playerToGrid(gamex, gamey, gamez float32) (gridx, gridy int) {
-	inv := float32(1) / float32(cc.units)
-	adj := float32(cc.units) * 0.5
+// playerToGrid maps to rectangular areas around grid centers.  This is needed to
+// interpret a player game location as an integer grid location.
+func (cc *coreControl) playerToGrid(gamex, gamey, gamez float64) (gridx, gridy int) {
+	inv := float64(1) / float64(cc.units)
+	adj := float64(cc.units) * 0.5
 	xadj := adj
 	if gamex < 0 {
 		xadj = -xadj
@@ -206,13 +203,12 @@ type gridSpot struct{ x, y int }
 
 // toGame takes a grid location and translates into a game location.
 // Game locations are where models of cores, walls, and tiles are placed.
-func (gs *gridSpot) toGame(gridx, gridy int, units float32) (gamex, gamez float32) {
-	return float32(gridx) * float32(units), float32(-gridy) * float32(units)
+func (gs *gridSpot) toGame(gridx, gridy int, units float64) (gamex, gamez float64) {
+	return float64(gridx) * units, float64(-gridy) * units
 }
 
 // toGrid takes the current game location and translates into a grid location.
 // Grid locations are where cores are dropped or fetched.
-func (gs *gridSpot) toGrid(gamex, gamey, gamez, units float32) (gridx, gridy int) {
-	inv := float32(1) / float32(units)
-	return int(gamex * inv), int(-gamez * inv)
+func (gs *gridSpot) toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
+	return int(gamex / float64(units)), int(-gamez / float64(units))
 }

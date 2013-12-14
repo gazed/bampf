@@ -11,12 +11,12 @@ import (
 	"vu"
 )
 
-// end is the screen that shows the end of game animation.  This is a model of
+// end is the screen that shows the end of game animation. This is a model of
 // a silicon atom. No one is expected to get here based on the current game
 // difficulty settings.
 type end struct {
 	mp     *bampf                 // The main program (bampf).
-	eng    *vu.Eng                // The 3D engine.
+	eng    vu.Engine              // The 3D engine.
 	scene  vu.Scene               // Group of model objects for the start screen.
 	bg     vu.Part                // Background.
 	atom   vu.Part                // Group the animated atom.
@@ -26,18 +26,19 @@ type end struct {
 	e3     vu.Part                // Slash electron group.
 	e4     vu.Part                // Backslash electron group.
 	reacts map[string]vu.Reaction // User input handlers for this screen.
-	scale  float32                // Used for the fade in animation.
+	scale  float64                // Used for the fade in animation.
 	state  func(int)              // Current screen state.
 }
 
 // Implement the screen interface.
-func (e *end) fadeIn() Animation                     { return e.createFadeIn() }
-func (e *end) fadeOut() Animation                    { return nil }
-func (e *end) resize(width, height int)              { e.handleResize(width, height) }
-func (e *end) update(urges []string, gt, dt float32) { e.handleUpdate(urges, gt, dt) }
-func (e *end) transition(event int)                  { e.state(event) }
+func (e *end) fadeIn() animation        { return e.createFadeIn() }
+func (e *end) fadeOut() animation       { return nil }
+func (e *end) resize(width, height int) { e.handleResize(width, height) }
+func (e *end) update(input *vu.Input)   { e.handleUpdate(input) }
+func (e *end) transition(event int)     { e.state(event) }
 
-// newEndScreen creates the end game screen.
+// newEndScreen creates the end game screen. Expected to be called once
+// on game startup.
 func newEndScreen(mp *bampf) screen {
 	e := &end{}
 	e.state = e.deactive
@@ -47,14 +48,14 @@ func newEndScreen(mp *bampf) screen {
 	e.reacts = map[string]vu.Reaction{}
 	_, _, w, h := e.eng.Size()
 	e.scene = e.eng.AddScene(vu.VP)
-	e.scene.SetPerspective(75, float32(w)/float32(h), 0.1, 50)
+	e.scene.SetPerspective(75, float64(w)/float64(h), 0.1, 50)
 	e.scene.SetViewLocation(0, 0, 10)
 	e.scene.SetVisibleRadius(250)
 	e.scene.SetVisible(false)
 
 	// use a filter effect for the background.
 	e.bg = e.scene.AddPart()
-	e.bg.SetFacade("square", "wave", "solid")
+	e.bg.SetFacade("square", "wave").SetMaterial("solid")
 	e.bg.SetScale(100, 100, 1)
 	e.bg.SetLocation(0, 0, -10)
 
@@ -63,7 +64,7 @@ func newEndScreen(mp *bampf) screen {
 	return e
 }
 
-// Deactive state.
+// deactive state waits for activate events.
 func (e *end) deactive(event int) {
 	switch event {
 	case activate:
@@ -75,7 +76,7 @@ func (e *end) deactive(event int) {
 	}
 }
 
-// Active state.
+// active state waits for pause or deactivate events.
 func (e *end) active(event int) {
 	switch event {
 	case evolve:
@@ -91,7 +92,7 @@ func (e *end) active(event int) {
 	}
 }
 
-// Paused state.
+// paused state waits for activate or deactivate events.
 func (e *end) paused(event int) {
 	switch event {
 	case activate:
@@ -105,10 +106,10 @@ func (e *end) paused(event int) {
 	}
 }
 
-// createFadeIn makes the fade in animation. The initial setup is necessary for
+// createFadeIn returns a new fade-in animation. The initial setup is necessary for
 // cases where the user finishes the game and then plays again and finishes again
 // all in one application session.
-func (e *end) createFadeIn() Animation {
+func (e *end) createFadeIn() animation {
 	e.bg.SetVisible(false)
 	e.scale = 0.01
 	e.atom.SetScale(e.scale, e.scale, e.scale)
@@ -117,20 +118,20 @@ func (e *end) createFadeIn() Animation {
 
 // handleResize adapts the screen to the new window dimensions.
 func (e *end) handleResize(width, height int) {
-	ratio := float32(width) / float32(height)
+	ratio := float64(width) / float64(height)
 	e.scene.SetPerspective(75, ratio, 0.1, 50)
 }
 
 // handleUpdate processes user events.
-func (e *end) handleUpdate(urges []string, gt, dt float32) {
-	for _, urge := range urges {
-		if reaction, ok := e.reacts[urge]; ok {
+func (e *end) handleUpdate(input *vu.Input) {
+	for press, _ := range input.Down {
+		if reaction, ok := e.reacts[press]; ok {
 			reaction.Do()
 		}
 	}
 }
 
-// create the atom.
+// create the silicon atom.
 func (e *end) newAtom() {
 	e.atom = e.scene.AddPart()
 	e.atom.SetCullable(false)
@@ -138,14 +139,14 @@ func (e *end) newAtom() {
 	e.atom.SetScale(e.scale, e.scale, e.scale)
 
 	cimg := e.atom.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(2, 2, 2)
 	cimg.SetTexture("atom", 1.93)
 	cimg.SetCullable(false)
 
 	// same billboard rotating the other way.
 	cimg = e.atom.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(2, 2, 2)
 	cimg.SetTexture("atom", -1.3)
 	cimg.SetCullable(false)
@@ -172,14 +173,14 @@ func (e *end) newAtom() {
 	e.eles = append(e.eles, newElectron(e.eng, e.e4, 3, 135))
 }
 
+// newFadeAnimation creates the fade-in to the end screen animation.
+func (e *end) newFadeAnimation() animation { return &fadeEndAnimation{e: e, ticks: 75} }
+
 // end
 // ===========================================================================
 // fadeEndAnimation fades in the end screen.
 
-// newFadeAnimation creates the fade-in to the end screen animation.
-func (e *end) newFadeAnimation() Animation { return &fadeEndAnimation{e: e, ticks: 75} }
-
-// fadeEndAnimation fades in the end screen when the game has been completed.
+// fadeEndAnimation fades in the end screen upon game completion.
 type fadeEndAnimation struct {
 	e     *end // Main state needed by the animation.
 	ticks int  // Animation run rate - number of animation steps.
@@ -187,8 +188,8 @@ type fadeEndAnimation struct {
 	state int  // Track progress 0:start, 1:run, 2:done.
 }
 
-// Animate is called each update while the animation is running.
-func (f *fadeEndAnimation) Animate(gt, dt float32) bool {
+// Animate is called each engine update while the animation is running.
+func (f *fadeEndAnimation) Animate(dt float64) bool {
 	switch f.state {
 	case 0:
 		f.tkcnt = 0
@@ -198,9 +199,9 @@ func (f *fadeEndAnimation) Animate(gt, dt float32) bool {
 		f.state = 1
 		return true
 	case 1:
-		f.e.scale += 0.99 / float32(f.ticks)
+		f.e.scale += 0.99 / float64(f.ticks)
 		f.e.atom.SetScale(f.e.scale, f.e.scale, f.e.scale)
-		f.e.bg.SetAlpha(f.e.bg.Alpha() + float32(1)/float32(f.ticks))
+		f.e.bg.SetAlpha(f.e.bg.Alpha() + float64(1)/float64(f.ticks))
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -232,7 +233,7 @@ type electron struct {
 }
 
 // newElectron creates a new electron model.
-func newElectron(eng *vu.Eng, part vu.Part, band int, angle float64) *electron {
+func newElectron(eng vu.Engine, part vu.Part, band int, angle float64) *electron {
 	// combine billboards to get an effect with some movement.
 	ele := &electron{}
 	ele.band = band
@@ -243,18 +244,18 @@ func newElectron(eng *vu.Eng, part vu.Part, band int, angle float64) *electron {
 
 	// get the animations spinning at different speeds.
 	random := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-	offset := float32(random.Intn(100)) / 75
+	offset := float64(random.Intn(100)) / 75
 
 	// a rotating billboard.
 	cimg := ele.core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.5, 0.5, 0.5)
 	cimg.SetTexture("ele", 1.90+offset)
 	cimg.SetCullable(false)
 
 	// same billboard rotating the other way.
 	cimg = ele.core.AddPart()
-	cimg.SetFacade("billboard", "bbra", "alpha")
+	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
 	cimg.SetScale(0.5, 0.5, 0.5)
 	cimg.SetTexture("ele", -1.1-offset)
 	cimg.SetCullable(false)
@@ -262,8 +263,8 @@ func newElectron(eng *vu.Eng, part vu.Part, band int, angle float64) *electron {
 }
 
 // initialLocation positions each electron in the given band and angle.
-func (ele *electron) initialLocation(angle float64) (dx, dy float32) {
-	dx = float32(float64(ele.band) * math.Cos(angle*math.Pi/180))
-	dy = float32(float64(ele.band) * math.Sin(angle*math.Pi/180))
+func (ele *electron) initialLocation(angle float64) (dx, dy float64) {
+	dx = float64(float64(ele.band) * math.Cos(angle*math.Pi/180))
+	dy = float64(float64(ele.band) * math.Sin(angle*math.Pi/180))
 	return
 }

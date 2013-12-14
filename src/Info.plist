@@ -11,7 +11,7 @@
 	<key>CFBundleIconFile</key>
 	<string>Bampf.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.company.appname</string>
+	<string>com.galvanizedlogic.bampf</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -23,12 +23,12 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleSignature</key>
-	<string>????</string>
+	<string>BAMP</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.arcade-games</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>10.7</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© YEAR, Company</string>
+	<string>© 2013, Galvanized Logic Inc.</string>
 </dict>
 </plist>

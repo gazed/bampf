@@ -7,18 +7,18 @@ import (
 	"vu"
 )
 
-// lens dictates how a camera moves.  The lens can be swapped for different
+// lens dictates how a camera moves. The lens can be swapped for different
 // behaviour, the prime example being switching the game fps for a debug
 // fly camera.
 type lens interface {
-	look(sc vu.Scene, spin, dt, xdiff, ydiff float32)
-	lookUpDown(sc vu.Scene, ydiff, spin, dt float32)
-	back(sc vu.Scene, dt, run float32)
-	forward(sc vu.Scene, dt, run float32)
-	left(sc vu.Scene, dt, run float32)
-	right(sc vu.Scene, dt, run float32)
-	up(sc vu.Scene, dt, run float32)
-	down(sc vu.Scene, dt, run float32)
+	look(sc vu.Scene, spin, dt, xdiff, ydiff float64)
+	lookUpDown(sc vu.Scene, ydiff, spin, dt float64)
+	back(bod vu.Part, dt, run float64)
+	forward(bod vu.Part, dt, run float64)
+	left(bod vu.Part, dt, run float64)
+	right(bod vu.Part, dt, run float64)
+	up(bod vu.Part, dt, run float64)
+	down(bod vu.Part, dt, run float64)
 }
 
 // lens
@@ -30,7 +30,7 @@ type fps struct{}
 
 // look changes the view left/right for changes in the x direction
 // and up/down for changes in the y direction.
-func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float32) {
+func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float64) {
 	if xdiff != 0 {
 		switch { // cap movement amount.
 		case xdiff > 10:
@@ -38,7 +38,7 @@ func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float32) {
 		case xdiff < -10:
 			xdiff = -10
 		}
-		sc.PanView(vu.YAxis, dt*float32(-xdiff)*spin)
+		sc.PanView(vu.YAxis, dt*float64(-xdiff)*spin)
 	}
 	if ydiff != 0 {
 		switch { // cap movement amount.
@@ -51,7 +51,7 @@ func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float32) {
 	}
 }
 
-func (f *fps) lookUpDown(sc vu.Scene, ydiff, spin, dt float32) {
+func (f *fps) lookUpDown(sc vu.Scene, ydiff, spin, dt float64) {
 	height := sc.ViewTilt()
 	height += dt * -ydiff * spin
 	if height > 90.0 {
@@ -64,19 +64,44 @@ func (f *fps) lookUpDown(sc vu.Scene, ydiff, spin, dt float32) {
 }
 
 // implement the rest of the lens interface.
-func (f *fps) back(sc vu.Scene, dt, run float32)    { sc.MoveView(0, 0, dt*run) }
-func (f *fps) forward(sc vu.Scene, dt, run float32) { sc.MoveView(0, 0, dt*-run) }
-func (f *fps) left(sc vu.Scene, dt, run float32)    { sc.MoveView(dt*-run, 0, 0) }
-func (f *fps) right(sc vu.Scene, dt, run float32)   { sc.MoveView(dt*run, 0, 0) }
-func (f *fps) up(sc vu.Scene, dt, run float32)      {} // only works in debug
-func (f *fps) down(sc vu.Scene, dt, run float32)    {} // only works in debug
+func (f *fps) back(bod vu.Part, dt, run float64)    { f.move(bod, 0, 0, dt*run) }
+func (f *fps) forward(bod vu.Part, dt, run float64) { f.move(bod, 0, 0, dt*-run) }
+func (f *fps) left(bod vu.Part, dt, run float64)    { f.move(bod, dt*-run, 0, 0) }
+func (f *fps) right(bod vu.Part, dt, run float64)   { f.move(bod, dt*run, 0, 0) }
+func (f *fps) up(bod vu.Part, dt, run float64)      {} // only works in debug
+func (f *fps) down(bod vu.Part, dt, run float64)    {} // only works in debug
+
+// Handle movement assuming there is a physics body associated with the camera.
+// This attempts to smooth out movement by adding a higher initial velocity push.
+func (f *fps) move(bod vu.Part, x, y, z float64) {
+	sx, _, sz := bod.Speed()
+	if x != 0 {
+		if sx == 0 {
+			bod.Move(x*40, 0, 0)
+		} else {
+			bod.Move(x, 0, 0)
+		}
+	}
+	if z != 0 {
+		if sz == 0 {
+			bod.Move(0, 0, z*40)
+		} else {
+			bod.Move(0, 0, z)
+		}
+	}
+}
 
 // fps
 // ===========================================================================
 // fly
 
 // fly is a type of lens used in debug builds.
-type fly struct{ fps } // debug camera movement
+type fly struct{ fps }
 
-func (f *fly) up(sc vu.Scene, dt, run float32)   { sc.MoveView(0, dt*run, 0) }
-func (f *fly) down(sc vu.Scene, dt, run float32) { sc.MoveView(0, dt*-run, 0) }
+// There is no physics body associated with the camera during debug.
+func (f *fly) back(bod vu.Part, dt, run float64)    { bod.Move(0, 0, dt*run) }
+func (f *fly) forward(bod vu.Part, dt, run float64) { bod.Move(0, 0, dt*-run) }
+func (f *fly) left(bod vu.Part, dt, run float64)    { bod.Move(dt*-run, 0, 0) }
+func (f *fly) right(bod vu.Part, dt, run float64)   { bod.Move(dt*run, 0, 0) }
+func (f *fly) up(bod vu.Part, dt, run float64)      { bod.Move(0, dt*run, 0) }
+func (f *fly) down(bod vu.Part, dt, run float64)    { bod.Move(0, dt*-run, 0) }

@@ -4,37 +4,18 @@
 // Package bampf is a 3D arcade collection game with random levels.
 // Bampf is the sound made when players teleport to safety.
 //
-// Note that the subdirectories contain resource data for the game.
+// The subdirectories contain the game resource data.
 package main
+
+// The main purpose of bampf is to test the vu (virtual universe) engine.
 
 import (
 	"log"
+	"runtime/debug"
 	"vu"
 )
 
-// bampf is the main program and initializes various game parts.
-// Its resposibilities are:
-//   1. start everything up by preparing and sharing the initial state
-//      and data structures.
-//   2. ensure orderly startup and switching between game states.
-type bampf struct {
-	eng         *vu.Eng           // Game engine and user input.
-	screens     map[string]screen // Available screens (states): start, game, end, options.
-	active      screen            // Currently drawn screen (state).
-	prior       screen            // Last active screen.  Needed for toggling options.
-	focus       bool              // Track if the window has focus
-	mute        bool              // Track if the sound is on or off.
-	wx, wy      int               // Application window size.
-	ani         *animator         // Handles short animations.
-	launchLevel int               // Choosen by the user on the launch screen.
-	state       func(int)         // Overall application state.
-}
-
-// version is set by the build using ld flags. Eg.
-//    go build -ldflags "-X main.version `git describe`"
-var version string
-
-// main initializes the data structures and starts the game loop.
+// main initializes the data structures and the game engine.
 func main() {
 	mp := &bampf{}
 	mp.state = mp.launching
@@ -48,18 +29,78 @@ func main() {
 		return
 	}
 	defer mp.eng.Shutdown()
+
+	// SetDirector registers bampf and results in an engine callback to Create().
 	mp.eng.SetDirector(mp)
-	mp.setMute(mp.mute)
+}
+
+// version is set by the build using ld flags. Eg.
+//    go build -ldflags "-X main.version `git describe`"
+var version string
+
+// main
+// ===========================================================================
+// bampf
+
+// bampf is the main program and initializes various game parts.
+// Its resposibilities are:
+//   1. Prepare and share the initial state and data structures.
+//   2. Ensure orderly switching between game states.
+type bampf struct {
+	eng         vu.Engine         // Game engine and user input.
+	state       func(int)         // Overall application state.
+	screens     map[string]screen // Available screens (states).
+	active      screen            // Currently drawn screen (state).
+	prior       screen            // Last active screen. Needed for toggling options.
+	mute        bool              // Track if the sound is on or off.
+	wx, wy      int               // Application window size.
+	ani         *animator         // Handles short animations.
+	launchLevel int               // Choosen by the user on the launch screen.
+}
+
+// Overall application state transitions. These are used as input
+// parameters to the bampf.state methods.
+const (
+	choose = iota // Transition to the choosing state.
+	play          // Transition to the playing state.
+	done          // Transition to the finished state.
+)
+
+// Create is run after engine intialization. The initial game screens are
+// created and the main action/update loop is started. All subsequent calls
+// from the engine will be to Update().
+func (mp *bampf) Create(eng vu.Engine) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic %s: %s Shutting down.", r, debug.Stack())
+		}
+	}()
 	mp.ani = &animator{}
+	mp.setMute(mp.mute)
 	mp.createScreens()
 	mp.state(choose)
+	mp.eng.Action() // run the engine until the user decides to quit.
+}
 
-	// run the engine until the user decides to quit.
-	mp.eng.Action()
+// Update is a regular engine callback and is passed onto the currently
+// active screen. Update will run many times a second and should return
+// promptly.
+func (mp *bampf) Update(input *vu.Input) {
+	if input.Resized {
+		mp.resize()
+	}
+	if input.Focus {
+		mp.ani.animate(input.Dt) // run active animations
+		if mp.active != nil {
+			mp.active.update(input)
+		}
+	}
 }
 
 // createScreens creates the different application screens and anything else
-// needed before the render loop takes over.
+// needed before the render loop takes over. There is a dependency between
+// screens that need key-bindings that means the game screen must be
+// created first.
 func (mp *bampf) createScreens() *bampf {
 	gameScreen, gameReactions := newGameScreen(mp)
 	mp.screens = map[string]screen{
@@ -75,14 +116,8 @@ func (mp *bampf) createScreens() *bampf {
 	return mp
 }
 
-// Overall application state transitions.
-const (
-	choose = iota // Transition to the choosing state.
-	play          // Transition to the playing state.
-	done          // Transition to the finished state.
-)
-
-// Launching state.
+// launching state is the first game state with a single transition to the
+// initial game screen where the user chooses the starting level.
 func (mp *bampf) launching(event int) {
 	switch event {
 	case choose:
@@ -94,7 +129,8 @@ func (mp *bampf) launching(event int) {
 	}
 }
 
-// Choosing state.
+// choosing state is where the user is choosing a starting level. The game
+// transitions to the playing state once player has made a choice.
 func (mp *bampf) choosing(event int) {
 	switch event {
 	case play:
@@ -105,7 +141,8 @@ func (mp *bampf) choosing(event int) {
 	}
 }
 
-// Playing state.
+// playing state is where the user is working through the game levels.
+// The user can complete or cancel the game.
 func (mp *bampf) playing(event int) {
 	switch event {
 	case done:
@@ -119,7 +156,9 @@ func (mp *bampf) playing(event int) {
 	}
 }
 
-// Finishing state.
+// finishing state is where the user has finished the final level.
+// The end game animation is displayed. The user has the option of going back
+// to the choosing screen and starting again.
 func (mp *bampf) finishing(event int) {
 	switch event {
 	case choose:
@@ -131,13 +170,13 @@ func (mp *bampf) finishing(event int) {
 }
 
 // transitionToGameScreen happens when the player chooses play from the
-// launchscreen.
+// launch screen.
 func (mp *bampf) transitionToGameScreen() {
 	fadeOut := mp.screens["launch"].fadeOut()
 	fadeIn := mp.screens["game"].fadeIn()
 	transition := func() {
 		mp.active = mp.screens["game"]
-		mp.active.transition(activate)
+		mp.active.transition(evolve)
 	}
 	mp.ani.addAnimation(newTransitionAnimation(fadeOut, fadeIn, transition))
 }
@@ -163,8 +202,7 @@ func (mp *bampf) returnToMenu() {
 	mp.active.transition(activate)
 }
 
-// toggleOptions shows or hides the options screen.  It can be triggered by
-// a start screen button or the "Esc" key.
+// toggleOptions shows or hides the options screen.
 func (mp *bampf) toggleOptions() {
 	if mp.active == mp.screens["options"] {
 		mp.active.transition(deactivate)
@@ -184,32 +222,19 @@ func (mp *bampf) gameStarted() bool {
 		mp.prior == mp.screens["end"] || mp.active == mp.screens["end"]
 }
 
-// Resize is an engine callback and is passed onto all screens.
-func (mp *bampf) Resize(x, y, width, height int) {
-	mp.eng.ResizeViewport(x, y, width, height)
-	mp.wx, mp.wy = width, height
+// resize adjusts all the screens to the current game window size.
+func (mp *bampf) resize() {
+	x, y, w, h := mp.eng.Size()
+	mp.eng.Resize(x, y, w, h)
+	mp.wx, mp.wy = w, h
 	for _, scr := range mp.screens {
-		scr.resize(width, height)
+		scr.resize(w, h)
 	}
-	mp.setWindow(x, y, width, height)
-}
-
-// Focus is an engine callback. Updates will only be processed if the window
-// has focus.
-func (mp *bampf) Focus(focus bool) { mp.focus = focus }
-
-// React is an engine callback and is passed onto the currently active screen.
-func (mp *bampf) Update(urges []string, gameTime, deltaTime float32) {
-	if mp.focus {
-		mp.ani.animate(gameTime, deltaTime) // run active animations
-		if mp.active != nil {
-			mp.active.update(urges, gameTime, deltaTime)
-		}
-	}
+	mp.setWindow(x, y, w, h)
 }
 
 // prefs recovers the saved game preferences.
-// Resonable defaults are returned if nothing was persisted.
+// Resonable defaults are returned if no saved information was found.
 func (mp *bampf) prefs() (x, y, w, h int, mute bool) {
 	x, y, w, h = 400, 100, 800, 600
 	saver := newSaver()
@@ -230,14 +255,14 @@ func (mp *bampf) prefs() (x, y, w, h int, mute bool) {
 	return
 }
 
-// setWindow persists the window dimensions.
+// setWindow saves the window dimensions.
 func (mp *bampf) setWindow(x, y, width, height int) {
 	saver := newSaver()
 	saver.restore()
 	saver.persistWindow(x, y, width, height)
 }
 
-// setMute turns the game sound off or on and persists the mute setting.
+// setMute turns the game sound off or on and saves the mute setting.
 func (mp *bampf) setMute(mute bool) {
 	mp.mute = mute
 	saver := newSaver()
@@ -249,14 +274,14 @@ func (mp *bampf) setMute(mute bool) {
 // ===========================================================================
 // screen
 
-// screen is used to coordinate which "screen" is currently active. There
-// should be one active screen at a time that receives user input.
+// screen is used to coordinate which "screen" is currently active. There is
+// only ever one active screen receiving user input.
 type screen interface {
-	fadeIn() Animation                     // A screen can provide an opening animation.
-	fadeOut() Animation                    // A screen can provide a closing animation.
-	resize(width, height int)              // Resize the screen.
-	transition(stateTransition int)        // Move the screen to a new state.
-	update(urges []string, gt, dt float32) // Process user input and run any screen specific animations.
+	fadeIn() animation              // A screen can provide an opening animation.
+	fadeOut() animation             // A screen can provide a closing animation.
+	resize(width, height int)       // Resize the screen.
+	transition(stateTransition int) // Move the screen to a new state.
+	update(input *vu.Input)         // Process user input and run any screen specific animations.
 }
 
 // Screen states and state transitions.
@@ -265,7 +290,30 @@ const (
 	activate          // Transition to the active state.
 	pause             // Transition to the paused state.
 	evolve            // Transition to the evolving state.
+	query             // Query existing state.
 )
+
+// screen
+// ===========================================================================
+// area
+
+// area describes a 2D part of a screen. It is the base class for sections
+// of the HUD and buttons.
+type area struct {
+	x, y   int     // bottom left corner.
+	w, h   int     // width and height.
+	cx, cy float64 // area center location.
+}
+
+// center calculates the center of the given area.
+func (a *area) center() (cx, cy float64) {
+	cx = float64(a.x + a.w/2)
+	cy = float64(a.y + a.h/2)
+	return
+}
+
+// area
+// ===========================================================================
 
 // CPU or MEM profiling can be turned on by adding a few lines
 // in main(). See http://blog.golang.org/profiling-go-programs
