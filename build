@@ -1,5 +1,5 @@
 #! /usr/bin/python
-# Copyright (c) 2013 Galvanized Logic Inc.
+# Copyright (c) 2013-2014 Galvanized Logic Inc.
 # Use is governed by a FreeBSD license found in the LICENSE file.
 
 """
@@ -23,12 +23,6 @@ import shlex        # run and control shell commands
 import subprocess   # for calling shell commands
 import glob         # for unix pattern matching
 from distutils import dir_util    # for copying directories
-import multiprocessing.managers   # for build slave 
-import subprocess                 # for build slave 
-
-# Deploy directory for web server and web documents
-webdir = os.path.expanduser('target/web/')
-webserver = 'bampfserver'
 
 def clean():
     # Remove all generated files.
@@ -66,7 +60,7 @@ def zipResources():
     # chdir to get resource file zip proper names.
     cwd = os.getcwd()
     os.chdir('src/bampf')
-    subprocess.call(['zip', 'resources.zip']+glob.glob('models/*')+glob.glob('shaders/*')+glob.glob('images/*')+glob.glob('audio/*'))
+    subprocess.call(['zip', 'resources.zip']+glob.glob('models/*')+glob.glob('source/*')+glob.glob('images/*')+glob.glob('audio/*'))
     os.chdir(cwd)
     shutil.move('src/bampf/resources.zip', 'target/resources.zip')
 

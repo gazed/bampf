@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -32,19 +32,20 @@ type sentinel struct {
 }
 
 // newSentinel creates a player enemy.
-func newSentinel(part vu.Part, level, units int) *sentinel {
+func newSentinel(part vu.Part, level, units int, fade float64) *sentinel {
 	s := &sentinel{}
 	s.part = part
 	s.units = float64(units)
 	s.part.SetLocation(0, 0.5, 0)
 	s.model = part.AddPart()
 	s.model.SetCullable(false)
-	s.model.SetFacade("cube", "flata").SetMaterial("tblue")
+	s.model.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
+	s.model.Role().SetUniform("fd", fade)
 	if level > 0 {
-		s.center = s.part.AddPart()
+		s.center = s.part.AddPart().SetScale(0.125, 0.125, 0.125)
 		s.center.SetCullable(false)
-		s.center.SetFacade("cube", "flata").SetMaterial("tred")
-		s.center.SetScale(0.125, 0.125, 0.125)
+		s.center.SetRole("flata").SetMesh("cube").SetMaterial("tred")
+		s.center.Role().SetUniform("fd", fade)
 	}
 
 	// Create a different seed for each sentinel by using its memory address.

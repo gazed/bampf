@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -63,7 +63,7 @@ func (cc *coreControl) dropSpot() (gridx, gridy int) {
 
 // dropCore creates a new core. Create it high so that it drops.
 // Return the x, z game location of the dropped core.
-func (cc *coreControl) dropCore(sc vu.Scene, gridx, gridy int) (gamex, gamez float64) {
+func (cc *coreControl) dropCore(sc vu.Scene, fade float64, gridx, gridy int) (gamex, gamez float64) {
 
 	// remove the dropped spot from the list of available spots.
 	removed := false // sanity check.
@@ -78,7 +78,7 @@ func (cc *coreControl) dropCore(sc vu.Scene, gridx, gridy int) (gamex, gamez flo
 		log.Printf("core.dropCore: failed to locate what should be a valid drop location")
 		return
 	}
-	core := cc.createCore(sc)
+	core := cc.createCore(sc, fade)
 
 	// add the core to the list of dropped cores.
 	cc.cores = append(cc.cores, core)
@@ -143,37 +143,45 @@ func (cc *coreControl) reset(sc vu.Scene) {
 }
 
 // createCore makes the new core model.
-func (cc *coreControl) createCore(sc vu.Scene) vu.Part {
+func (cc *coreControl) createCore(sc vu.Scene, fade float64) vu.Part {
 	core := sc.AddPart()
 	core.SetBody(vu.Sphere(0.15), 1, 0.8)
 
 	// combine billboards to get an effect with some movement.
-	cimg := core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.25, 0.25, 0.25)
-	cimg.SetTexture("ele", 1.93)
+	cimg := core.AddPart().SetScale(0.25, 0.25, 0.25)
 	cimg.SetCullable(false)
+	cimg.SetRole("bbra").SetMesh("billboard").AddTex("ele")
+	cimg.Role().SetAlpha(0.6)
+	cimg.Role().SetUniform("spin", 1.93)
+	cimg.Role().SetUniform("fd", fade)
+	cimg.Role().Set2D()
 
 	// same billboard rotating the other way.
-	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.25, 0.25, 0.25)
-	cimg.SetTexture("ele", -1.3)
+	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
 	cimg.SetCullable(false)
+	cimg.SetRole("bbra").SetMesh("billboard").AddTex("ele")
+	cimg.Role().SetAlpha(0.6)
+	cimg.Role().SetUniform("spin", -1.3)
+	cimg.Role().SetUniform("fd", fade)
+	cimg.Role().Set2D()
 
 	// halo billboard rotating one way.
-	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.25, 0.25, 0.25)
-	cimg.SetTexture("halo", -2)
+	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
 	cimg.SetCullable(false)
+	cimg.SetRole("bbra").SetMesh("billboard").AddTex("halo")
+	cimg.Role().SetAlpha(0.4)
+	cimg.Role().SetUniform("spin", -2.0)
+	cimg.Role().SetUniform("fd", fade)
+	cimg.Role().Set2D()
 
 	// halo billboard rotating the other way.
-	cimg = core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.25, 0.25, 0.25)
-	cimg.SetTexture("halo", 1)
+	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
 	cimg.SetCullable(false)
+	cimg.SetRole("bbra").SetMesh("billboard").AddTex("halo")
+	cimg.Role().SetAlpha(0.4)
+	cimg.Role().SetUniform("spin", 1.0)
+	cimg.Role().SetUniform("fd", fade)
+	cimg.Role().Set2D()
 	return core
 }
 

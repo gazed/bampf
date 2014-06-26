@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -12,30 +12,29 @@ import (
 // application launches. The start screen allows the user to change options and
 // to choose the game difficulty before starting to play.
 type launch struct {
-	area                              // The launch screen fills up the game window.
-	scene      vu.Scene               // Group of model objects for the start screen.
-	eng        vu.Engine              // The 3D engine.
-	anim       *startAnimation        // The start button animation.
-	buttons    []*button              // The game select and option screen buttons.
-	bg1        vu.Part                // Background rotating one way.
-	bg2        vu.Part                // Background rotating the other way.
-	buttonSize int                    // Width and height of each button.
-	mp         *bampf                 // Needed for toggling the option screen.
-	reacts     map[string]vu.Reaction // User input handlers for this screen.
-	state      func(int)              // Current screen state.
-	mx, my     int                    // Current mouse locations.
+	area                       // The launch screen fills up the game window.
+	scene      vu.Scene        // Group of model objects for the start screen.
+	eng        vu.Engine       // The 3D engine.
+	anim       *startAnimation // The start button animation.
+	buttons    []*button       // The game select and option screen buttons.
+	bg1        vu.Part         // Background rotating one way.
+	bg2        vu.Part         // Background rotating the other way.
+	buttonSize int             // Width and height of each button.
+	mp         *bampf          // Needed for toggling the option screen.
+	reacts     ReactionSet     // User input handlers for this screen.
+	state      func(int)       // Current screen state.
 }
 
 // launch implements the screen interface.
 func (l *launch) fadeIn() animation        { return nil }
 func (l *launch) fadeOut() animation       { return l.newFadeAnimation() }
 func (l *launch) resize(width, height int) { l.handleResize(width, height) }
-func (l *launch) update(input *vu.Input)   { l.handleUpdate(input) }
+func (l *launch) update(in *vu.Input)      { l.handleUpdate(in) }
 func (l *launch) transition(event int)     { l.state(event) }
 
 // newLaunchScreen creates the start screen. Measurements are 1 pixel == 1 unit
 // because the launch screen is done as an overlay.
-func newLaunchScreen(mp *bampf) screen {
+func newLaunchScreen(mp *bampf) *launch {
 	l := &launch{}
 	l.state = l.deactive
 	l.mp = mp
@@ -46,19 +45,17 @@ func newLaunchScreen(mp *bampf) screen {
 	l.buttonSize = 64
 
 	// the start screen only reacts to mouse clicks.
-	l.reacts = map[string]vu.Reaction{
-		"Lm":  vu.NewReactOnce("click", func() { l.click(l.mx, l.my) }),
-		"Esc": vu.NewReactOnce("options", func() { l.mp.toggleOptions() }),
-		"Sp":  vu.NewReactOnce("skip", func() { l.mp.ani.skip() }),
-	}
+	l.reacts = NewReactionSet([]Reaction{
+		{"skip", "Sp", l.mp.skipAnimation},
+	})
 
 	// create the background.
 	l.bg1 = l.scene.AddPart()
-	l.bg1.SetFacade("icon", "uv").SetMaterial("half")
-	l.bg1.SetTexture("backdrop", 10)
+	l.bg1.SetRole("uv").SetMesh("icon").AddTex("backdrop").SetMaterial("half")
+	l.bg1.Role().SetUniform("spin", 10.0)
 	l.bg2 = l.scene.AddPart()
-	l.bg2.SetFacade("icon", "uv").SetMaterial("half")
-	l.bg2.SetTexture("backdrop", -10)
+	l.bg2.SetRole("uv").SetMesh("icon").AddTex("backdrop").SetMaterial("half")
+	l.bg2.Role().SetUniform("spin", -10.0)
 
 	// add the animated start button to the scene.
 	l.anim = newStartAnimation(mp, l.scene.AddPart(), l.w, l.h)
@@ -68,12 +65,12 @@ func newLaunchScreen(mp *bampf) screen {
 	buttonPart := l.scene.AddPart()
 	sz := int(l.buttonSize)
 	l.buttons = []*button{
-		newButton(l.eng, buttonPart, sz, "lvl0", vu.NewReaction("setLevel", func() { l.startAt(0) })),
-		newButton(l.eng, buttonPart, sz, "lvl1", vu.NewReaction("setLevel", func() { l.startAt(1) })),
-		newButton(l.eng, buttonPart, sz, "lvl2", vu.NewReaction("setLevel", func() { l.startAt(2) })),
-		newButton(l.eng, buttonPart, sz, "lvl3", vu.NewReaction("setLevel", func() { l.startAt(3) })),
-		newButton(l.eng, buttonPart, sz, "lvl4", vu.NewReaction("setLevel", func() { l.startAt(4) })),
-		newButton(l.eng, buttonPart, sz, "options", l.reacts["Esc"]),
+		newButton(buttonPart, sz, "lvl0", func(i *vu.Input, down int) { l.startAt(0) }),
+		newButton(buttonPart, sz, "lvl1", func(i *vu.Input, down int) { l.startAt(1) }),
+		newButton(buttonPart, sz, "lvl2", func(i *vu.Input, down int) { l.startAt(2) }),
+		newButton(buttonPart, sz, "lvl3", func(i *vu.Input, down int) { l.startAt(3) }),
+		newButton(buttonPart, sz, "lvl4", func(i *vu.Input, down int) { l.startAt(4) }),
+		newButton(buttonPart, sz, "options", l.mp.toggleOptions),
 	}
 	for _, btn := range l.buttons {
 		btn.icon.SetScale(1, 1, 0)
@@ -85,6 +82,13 @@ func newLaunchScreen(mp *bampf) screen {
 	l.mp.ani.addAnimation(l.newButtonAnimation())
 	l.scene.SetVisible(false)
 	return l
+}
+
+// skip the current animation, if any.
+func (l *launch) skipAnimation(in *vu.Input, down int) {
+	if down == 1 {
+		l.mp.ani.skip()
+	}
 }
 
 // deactive state waits for the activate event.
@@ -142,14 +146,14 @@ func (l *launch) evolving(event int) {
 
 // disableKeys disallows certain keys when the screen is not active.
 func (l *launch) disableKeys() {
-	delete(l.reacts, "Esc")
-	delete(l.reacts, "Lm")
+	l.reacts.Rem("opts")
+	l.reacts.Rem("click")
 }
 
 // enableKeys reenables previously disabled keys.
 func (l *launch) enableKeys() {
-	l.reacts["Esc"] = vu.NewReactOnce("options", func() { l.mp.toggleOptions() })
-	l.reacts["Lm"] = vu.NewReactOnce("click", func() { l.click(l.mx, l.my) })
+	l.reacts.Add(Reaction{"opts", "Esc", l.mp.toggleOptions})
+	l.reacts.Add(Reaction{"click", "Lm", func(i *vu.Input, down int) { l.click(i, down) }})
 }
 
 // handleResize adjusts the screen to the current window size.
@@ -186,35 +190,35 @@ func (l *launch) setSize(x, y, width, height int) {
 }
 
 // handleUpdate runs things that need doing every game loop.
-func (l *launch) handleUpdate(input *vu.Input) {
-	l.mx, l.my = input.Mx, input.My
-	for key, _ := range input.Down {
-		if reaction, ok := l.reacts[key]; ok {
-			reaction.Do()
-		}
+func (l *launch) handleUpdate(in *vu.Input) {
+	for key, down := range in.Down {
+		l.reacts.Respond(key, in, down)
 	}
-	l.hover()
+	l.hover(in)
 	l.rotateBackdrop()
-	l.anim.rotate(input.Gt, input.Dt)
+	l.anim.rotate(in.Gt, in.Dt)
 }
 
 // hover hilites any button the mouse is over.
-func (l *launch) hover() {
-	l.anim.hover(l.mx, l.my)
+func (l *launch) hover(i *vu.Input) {
+	l.anim.hover(i.Mx, i.My)
 	for _, btn := range l.buttons {
-		btn.hover(l.mx, l.my)
+		btn.hover(i.Mx, i.My)
 	}
 }
 
 // click is called when the user presses the left mouse button.
-func (l *launch) click(mx, my int) {
-	for _, btn := range l.buttons {
-		if btn.clicked(mx, my) {
-			return // small buttons take precedence over the start game button.
+func (l *launch) click(i *vu.Input, down int) {
+	if down == 1 {
+		mx, my := i.Mx, i.My
+		for _, btn := range l.buttons {
+			if btn.clicked(i, down) {
+				return // small buttons take precedence over the start game button.
+			}
 		}
-	}
-	if l.anim.clicked(mx, my) {
-		l.mp.state(play)
+		if l.anim.clicked(mx, my) {
+			l.mp.state(playGame)
+		}
 	}
 }
 
@@ -266,12 +270,12 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 	switch f.state {
 	case 0:
 		f.l.state(evolve)
-		f.l.anim.hilite.SetAlpha(0)
+		f.l.anim.hilite.Role().SetAlpha(0.0)
 		f.state = 1
 		return true
 	case 1:
 		f.l.anim.scale -= 200 / float64(f.ticks)
-		f.l.bg1.SetAlpha(f.l.bg1.Alpha() - float64(1)/float64(f.ticks))
+		f.l.bg1.Role().SetAlpha(f.l.bg1.Role().Alpha() - float64(1)/float64(f.ticks))
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -287,8 +291,8 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 // back to what they were (so that others using the same material aren't
 // affected).
 func (f *fadeStartAnimation) Wrap() {
-	f.l.anim.hilite.SetAlpha(0.3)
-	f.l.bg1.SetAlpha(0.5)
+	f.l.anim.hilite.Role().SetAlpha(0.3)
+	f.l.bg1.Role().SetAlpha(0.5)
 	f.state = 2
 	f.l.state(deactivate)
 }
@@ -379,7 +383,7 @@ func newStartAnimation(mp *bampf, parent vu.Part, screenWidth, screenHeight int)
 	sa.parent = parent
 	sa.scale = 200
 	sa.hilite = parent.AddPart()
-	sa.hilite.SetFacade("square", "flat").SetMaterial("white")
+	sa.hilite.SetRole("flat").SetMesh("square").SetMaterial("white")
 	sa.hilite.SetVisible(false)
 	sa.resize(screenWidth, screenHeight)
 	sa.showLevel(0)

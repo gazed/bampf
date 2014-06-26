@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -15,49 +15,49 @@ import (
 // a silicon atom. No one is expected to get here based on the current game
 // difficulty settings.
 type end struct {
-	mp     *bampf                 // The main program (bampf).
-	eng    vu.Engine              // The 3D engine.
-	scene  vu.Scene               // Group of model objects for the start screen.
-	bg     vu.Part                // Background.
-	atom   vu.Part                // Group the animated atom.
-	eles   []*electron            // All electrons.
-	e1     vu.Part                // Up/down electron group.
-	e2     vu.Part                // Left/right electron group.
-	e3     vu.Part                // Slash electron group.
-	e4     vu.Part                // Backslash electron group.
-	reacts map[string]vu.Reaction // User input handlers for this screen.
-	scale  float64                // Used for the fade in animation.
-	state  func(int)              // Current screen state.
+	mp     *bampf      // The main program (bampf).
+	eng    vu.Engine   // The 3D engine.
+	scene  vu.Scene    // Group of model objects for the start screen.
+	bg     vu.Part     // Background.
+	atom   vu.Part     // Group the animated atom.
+	eles   []*electron // All electrons.
+	e1     vu.Part     // Up/down electron group.
+	e2     vu.Part     // Left/right electron group.
+	e3     vu.Part     // Slash electron group.
+	e4     vu.Part     // Backslash electron group.
+	reacts ReactionSet // User input handlers for this screen.
+	scale  float64     // Used for the fade in animation.
+	state  func(int)   // Current screen state.
+	fov    float64     // Field of view.
 }
 
 // Implement the screen interface.
 func (e *end) fadeIn() animation        { return e.createFadeIn() }
 func (e *end) fadeOut() animation       { return nil }
 func (e *end) resize(width, height int) { e.handleResize(width, height) }
-func (e *end) update(input *vu.Input)   { e.handleUpdate(input) }
+func (e *end) update(in *vu.Input)      { e.handleUpdate(in) }
 func (e *end) transition(event int)     { e.state(event) }
 
 // newEndScreen creates the end game screen. Expected to be called once
 // on game startup.
-func newEndScreen(mp *bampf) screen {
+func newEndScreen(mp *bampf) *end {
 	e := &end{}
 	e.state = e.deactive
 	e.mp = mp
 	e.eng = mp.eng
 	e.scale = 0.01
-	e.reacts = map[string]vu.Reaction{}
+	e.fov = 75
+	e.reacts = NewReactionSet([]Reaction{})
 	_, _, w, h := e.eng.Size()
 	e.scene = e.eng.AddScene(vu.VP)
-	e.scene.SetPerspective(75, float64(w)/float64(h), 0.1, 50)
-	e.scene.SetViewLocation(0, 0, 10)
-	e.scene.SetVisibleRadius(250)
+	e.scene.SetPerspective(e.fov, float64(w)/float64(h), 0.1, 50)
+	e.scene.SetLocation(0, 0, 10)
 	e.scene.SetVisible(false)
 
 	// use a filter effect for the background.
-	e.bg = e.scene.AddPart()
-	e.bg.SetFacade("square", "wave").SetMaterial("solid")
-	e.bg.SetScale(100, 100, 1)
-	e.bg.SetLocation(0, 0, -10)
+	e.bg = e.scene.AddPart().SetLocation(0, 0, -10).SetScale(100, 100, 1)
+	e.bg.SetRole("wave").SetMesh("square").SetMaterial("solid")
+	e.bg.Role().SetUniform("screen", []float64{500, 500})
 
 	// create the atom and its electrons.
 	e.newAtom()
@@ -68,7 +68,7 @@ func newEndScreen(mp *bampf) screen {
 func (e *end) deactive(event int) {
 	switch event {
 	case activate:
-		e.reacts["Esc"] = vu.NewReactOnce("end", func() { e.mp.toggleOptions() })
+		e.reacts.Add(Reaction{"end", "Esc", e.mp.toggleOptions})
 		e.scene.SetVisible(true)
 		e.state = e.active
 	default:
@@ -81,10 +81,10 @@ func (e *end) active(event int) {
 	switch event {
 	case evolve:
 	case pause:
-		delete(e.reacts, "Esc")
+		e.reacts.Rem("end")
 		e.state = e.paused
 	case deactivate:
-		delete(e.reacts, "Esc")
+		e.reacts.Rem("end")
 		e.scene.SetVisible(false)
 		e.state = e.deactive
 	default:
@@ -96,7 +96,7 @@ func (e *end) active(event int) {
 func (e *end) paused(event int) {
 	switch event {
 	case activate:
-		e.reacts["Esc"] = vu.NewReactOnce("end", func() { e.mp.toggleOptions() })
+		e.reacts.Add(Reaction{"end", "Esc", e.mp.toggleOptions})
 		e.state = e.active
 	case deactivate:
 		e.scene.SetVisible(false)
@@ -119,58 +119,53 @@ func (e *end) createFadeIn() animation {
 // handleResize adapts the screen to the new window dimensions.
 func (e *end) handleResize(width, height int) {
 	ratio := float64(width) / float64(height)
-	e.scene.SetPerspective(75, ratio, 0.1, 50)
+	e.scene.SetPerspective(e.fov, ratio, 0.1, 50)
 }
 
 // handleUpdate processes user events.
-func (e *end) handleUpdate(input *vu.Input) {
-	for press, _ := range input.Down {
-		if reaction, ok := e.reacts[press]; ok {
-			reaction.Do()
-		}
+func (e *end) handleUpdate(in *vu.Input) {
+	for press, down := range in.Down {
+		e.reacts.Respond(press, in, down)
 	}
 }
 
 // create the silicon atom.
 func (e *end) newAtom() {
 	e.atom = e.scene.AddPart()
-	e.atom.SetCullable(false)
 	e.atom.SetLocation(0, 0, 0)
 	e.atom.SetScale(e.scale, e.scale, e.scale)
 
-	cimg := e.atom.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(2, 2, 2)
-	cimg.SetTexture("atom", 1.93)
-	cimg.SetCullable(false)
+	cimg := e.atom.AddPart().SetScale(2, 2, 2)
+	cimg.SetRole("bbr").SetMesh("billboard").AddTex("atom").SetMaterial("alpha")
+	cimg.Role().SetUniform("spin", 1.93)
+	cimg.Role().Set2D()
 
 	// same billboard rotating the other way.
-	cimg = e.atom.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(2, 2, 2)
-	cimg.SetTexture("atom", -1.3)
-	cimg.SetCullable(false)
+	cimg = e.atom.AddPart().SetScale(2, 2, 2)
+	cimg.SetRole("bbr").SetMesh("billboard").AddTex("atom").SetMaterial("alpha")
+	cimg.Role().SetUniform("spin", -0.7)
+	cimg.Role().Set2D()
 
 	// create the electrons.
 	e.e1 = e.atom.AddPart()
 	e.eles = []*electron{}
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 2, 90))
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 3, 90))
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 4, 90))
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 2, -90))
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 3, -90))
-	e.eles = append(e.eles, newElectron(e.eng, e.e1, 4, -90))
+	e.eles = append(e.eles, newElectron(e.e1, 2, 90))
+	e.eles = append(e.eles, newElectron(e.e1, 3, 90))
+	e.eles = append(e.eles, newElectron(e.e1, 4, 90))
+	e.eles = append(e.eles, newElectron(e.e1, 2, -90))
+	e.eles = append(e.eles, newElectron(e.e1, 3, -90))
+	e.eles = append(e.eles, newElectron(e.e1, 4, -90))
 	e.e2 = e.atom.AddPart()
-	e.eles = append(e.eles, newElectron(e.eng, e.e2, 3, 0))
-	e.eles = append(e.eles, newElectron(e.eng, e.e2, 4, 0))
-	e.eles = append(e.eles, newElectron(e.eng, e.e2, 3, 180))
-	e.eles = append(e.eles, newElectron(e.eng, e.e2, 4, 180))
+	e.eles = append(e.eles, newElectron(e.e2, 3, 0))
+	e.eles = append(e.eles, newElectron(e.e2, 4, 0))
+	e.eles = append(e.eles, newElectron(e.e2, 3, 180))
+	e.eles = append(e.eles, newElectron(e.e2, 4, 180))
 	e.e3 = e.atom.AddPart()
-	e.eles = append(e.eles, newElectron(e.eng, e.e3, 3, 45))
-	e.eles = append(e.eles, newElectron(e.eng, e.e3, 3, -135))
+	e.eles = append(e.eles, newElectron(e.e3, 3, 45))
+	e.eles = append(e.eles, newElectron(e.e3, 3, -135))
 	e.e4 = e.atom.AddPart()
-	e.eles = append(e.eles, newElectron(e.eng, e.e4, 3, -45))
-	e.eles = append(e.eles, newElectron(e.eng, e.e4, 3, 135))
+	e.eles = append(e.eles, newElectron(e.e4, 3, -45))
+	e.eles = append(e.eles, newElectron(e.e4, 3, 135))
 }
 
 // newFadeAnimation creates the fade-in to the end screen animation.
@@ -194,14 +189,14 @@ func (f *fadeEndAnimation) Animate(dt float64) bool {
 	case 0:
 		f.tkcnt = 0
 		f.e.bg.SetVisible(true)
-		f.e.bg.SetAlpha(0)
+		f.e.bg.Role().SetAlpha(0.0)
 		f.e.scale = 0.01
 		f.state = 1
 		return true
 	case 1:
 		f.e.scale += 0.99 / float64(f.ticks)
 		f.e.atom.SetScale(f.e.scale, f.e.scale, f.e.scale)
-		f.e.bg.SetAlpha(f.e.bg.Alpha() + float64(1)/float64(f.ticks))
+		f.e.bg.Role().SetAlpha(f.e.bg.Role().Alpha() + float64(1)/float64(f.ticks))
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -216,7 +211,7 @@ func (f *fadeEndAnimation) Animate(dt float64) bool {
 // Wrap is called to immediately finish up the animation.
 func (f *fadeEndAnimation) Wrap() {
 	f.e.bg.SetVisible(true)
-	f.e.bg.SetAlpha(1)
+	f.e.bg.Role().SetAlpha(1.0)
 	f.e.scale = 1.0
 	f.e.atom.SetScale(f.e.scale, f.e.scale, f.e.scale)
 	f.state = 2
@@ -233,32 +228,28 @@ type electron struct {
 }
 
 // newElectron creates a new electron model.
-func newElectron(eng vu.Engine, part vu.Part, band int, angle float64) *electron {
+func newElectron(part vu.Part, band int, angle float64) *electron {
 	// combine billboards to get an effect with some movement.
 	ele := &electron{}
 	ele.band = band
-	ele.core = part.AddPart()
-	ele.core.SetCullable(false)
 	x, y := ele.initialLocation(angle)
-	ele.core.SetLocation(x, y, 0)
+	ele.core = part.AddPart().SetLocation(x, y, 0)
 
 	// get the animations spinning at different speeds.
 	random := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	offset := float64(random.Intn(100)) / 75
 
 	// a rotating billboard.
-	cimg := ele.core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.5, 0.5, 0.5)
-	cimg.SetTexture("ele", 1.90+offset)
-	cimg.SetCullable(false)
+	cimg := ele.core.AddPart().SetScale(0.5, 0.5, 0.5)
+	cimg.SetRole("bbr").SetMesh("billboard").AddTex("ele").SetMaterial("alpha")
+	cimg.Role().SetUniform("spin", 1.90+offset)
+	cimg.Role().Set2D()
 
 	// same billboard rotating the other way.
-	cimg = ele.core.AddPart()
-	cimg.SetFacade("billboard", "bbra").SetMaterial("alpha")
-	cimg.SetScale(0.5, 0.5, 0.5)
-	cimg.SetTexture("ele", -1.1-offset)
-	cimg.SetCullable(false)
+	cimg = ele.core.AddPart().SetScale(0.5, 0.5, 0.5)
+	cimg.SetRole("bbr").SetMesh("billboard").AddTex("ele").SetMaterial("alpha")
+	cimg.Role().SetUniform("spin", -0.4-offset)
+	cimg.Role().Set2D()
 	return ele
 }
 

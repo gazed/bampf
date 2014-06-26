@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -29,7 +29,9 @@ type level struct {
 	plan      grid.Grid    // Stage floorplan.
 	coreLimit int          // Max cores for this level.
 	units     int          // Reference base size for all game elements.
+	fade      float64      // distance to fade out.
 	colour    float32      // Current background shade-of-gray colour.
+	fov       float64      // Field of view.
 }
 
 // newLevel creates the indicated game level.
@@ -44,14 +46,15 @@ func newLevel(g *game, levelNum int) *level {
 
 	// initialize the scenes.
 	lvl := &level{}
+	lvl.fade = g.vr * 0.7
 	lvl.units = 2
 	lvl.colour = 1.0
+	lvl.fov = 75
 	lvl.scene = g.eng.AddScene(vu.VF)
-	lvl.scene.SetPerspective(75, float64(g.w)/float64(g.h), 0.1, 50)
+	lvl.scene.SetPerspective(lvl.fov, float64(g.w)/float64(g.h), 0.1, 50)
 	lvl.scene.SetLightLocation(50, 50, 50)
 	lvl.scene.SetLightColour(0.2, 0.5, 0.8)
-	lvl.scene.SetVisibleRadius(g.vr * 0.70)
-	lvl.scene.SetVisibleDirection(true)
+	lvl.scene.SetCuller(vu.NewFacingCuller(lvl.fade))
 	lvl.scene.SetSorted(true)
 
 	// save everything as one game stage.
@@ -62,7 +65,7 @@ func newLevel(g *game, levelNum int) *level {
 	// create hud before player since player is drawn within hd.scene.
 	lvl.hd = newHud(g.eng, gameMuster[lvl.num])
 	lvl.player = lvl.makePlayer(g.eng, lvl.hd.scene, lvl.num+1)
-	lvl.makeSentries(g.eng, lvl.scene, lvl.num)
+	lvl.makeSentries(lvl.scene, lvl.num)
 
 	// create one large physics floor.
 	lvl.floor = lvl.scene.AddPart()
@@ -105,8 +108,21 @@ func (lvl *level) setVisible(isVisible bool) {
 // resize adjusts the level to the new window dimensions.
 func (lvl *level) resize(width, height int) {
 	ratio := float64(width) / float64(height)
-	lvl.scene.SetPerspective(75, ratio, 0.1, 50)
+	lvl.scene.SetPerspective(lvl.fov, ratio, 0.1, 50)
 	lvl.hd.resize(width, height)
+}
+
+// alterFov is for debugging and testing. It helps to find a reasonable
+// vertical fov value.
+func (lvl *level) alterFov(change float64) {
+	lvl.fov += change
+	_, _, w, h := lvl.eng.Size()
+	lvl.resize(w, h)
+
+	// Uncomment to see the actual vertical and horizontal field of view values.
+	// vrad := lin.Rad(lvl.fov)
+	// hrad := 2 * math.Atan(math.Tan(vrad/2)*float64(w)/float64(h))
+	// fmt.Printf("vfov %f hfov %f\n", lvl.fov, lin.Deg(hrad))
 }
 
 // update is called from game update.
@@ -114,8 +130,8 @@ func (lvl *level) resize(width, height int) {
 func (lvl *level) update() {
 
 	// use the camera's orientation and the physics bodies location.
-	lvl.body.SetRotation(lvl.scene.ViewRotation())
-	lvl.scene.SetViewLocation(lvl.body.Location())
+	lvl.body.SetRotation(lvl.scene.Rotation())
+	lvl.scene.SetLocation(lvl.body.Location())
 
 	// run animations and other regular checks.
 	lvl.setMist()
@@ -131,7 +147,7 @@ func (lvl *level) update() {
 // The background colour becomes darker the deeper into the maze
 // and the greater the level.
 func (lvl *level) setMist() {
-	px, _, pz := lvl.scene.ViewLocation()
+	px, _, pz := lvl.scene.Location()
 	cx, _, cz := lvl.center.Location()
 	dx, dz := float64(px-cx), float64(pz-cz)
 	dist := math.Sqrt(dx*dx + dz*dz)
@@ -180,8 +196,8 @@ func (lvl *level) activate(hm healthMonitor) {
 	lvl.hd.setLevel(lvl)
 
 	// reset the camera each time, so it is in a known position.
-	lvl.scene.SetViewRotation(0, 0, 0, 1)
-	lvl.scene.SetViewLocation(4, 0.5, 10)
+	lvl.scene.SetRotation(0, 0, 0, 1)
+	lvl.scene.SetLocation(4, 0.5, 10)
 	lvl.player.resetEnergy()
 
 	// ensure the walls and floor are added to the physics simulation.
@@ -197,16 +213,8 @@ func (lvl *level) activate(hm healthMonitor) {
 }
 
 // ensure the displayed action keys and labels are correct.
-func (lvl *level) updateKeys(reacts map[string]vu.Reaction) {
-	tk, ck := "t", "c" // defaults are intentionally off.
-	for str, react := range reacts {
-		if react.Name() == "teleport" {
-			tk = str
-		}
-		if react.Name() == "cloak" {
-			ck = str
-		}
-	}
+func (lvl *level) updateKeys(reacts ReactionSet) {
+	tk, ck := reacts.Key("teleport"), reacts.Key("cloak")
 	lvl.hd.xp.updateKeys(tk, ck)
 }
 
@@ -225,19 +233,18 @@ func (lvl *level) buildFloorPlan(scene vu.Scene, hd *hud, plan grid.Grid) {
 			band := plan.Band(x, y) / 3
 			if x == width/2 && y == height/2 {
 				lvl.gcx, lvl.gcy = x, y // remember the maze center location
-				lvl.center = scene.AddPart()
-				lvl.center.SetFacade("tile", "uvra").SetMaterial("alpha")
-				lvl.center.SetTexture("drop1", 1)
-				lvl.center.SetLocation(xc, 0, yc)
+				lvl.center = scene.AddPart().SetLocation(xc, 0, yc)
+				lvl.center.SetRole("uvra").SetMesh("tile").AddTex("drop1").SetMaterial("alpha")
+				lvl.center.Role().SetUniform("spin", 1.0)
+				lvl.center.Role().SetUniform("fd", lvl.fade)
 			} else if plan.IsWall(x, y) {
 
 				// draw flat on the y plane with the maze extending into the screen.
 				wm := lvl.wallMeshLabel(band)
 				wt := lvl.wallTextureLabel(band)
-				wall := scene.AddPart()
-				wall.SetFacade(wm, "uva").SetMaterial("green")
-				wall.SetTexture(wt, 0)
-				wall.SetLocation(xc, 0, yc)
+				wall := scene.AddPart().SetLocation(xc, 0, yc)
+				wall.SetRole("uva").SetMesh(wm).AddTex(wt).SetMaterial("green")
+				wall.Role().SetUniform("fd", lvl.fade)
 				lvl.walls = append(lvl.walls, wall)
 
 				// add the wall to the minimap
@@ -245,10 +252,9 @@ func (lvl *level) buildFloorPlan(scene vu.Scene, hd *hud, plan grid.Grid) {
 			} else {
 				// the floor tiles.
 				tileLabel := lvl.tileLabel(band)
-				tile := scene.AddPart()
-				tile.SetFacade("tile", "uva").SetMaterial("alpha")
-				tile.SetTexture(tileLabel, 0)
-				tile.SetLocation(xc, 0, yc)
+				tile := scene.AddPart().SetLocation(xc, 0, yc)
+				tile.SetRole("uva").SetMesh("tile").AddTex(tileLabel).SetMaterial("alpha")
+				tile.Role().SetUniform("fd", lvl.fade)
 
 				// remember the tile locations for drop spots inside the maze.
 				lvl.cc.addDropLocation(x, y)
@@ -283,11 +289,11 @@ func (lvl *level) makePlayer(eng vu.Engine, scene vu.Scene, levelNum int) *troop
 }
 
 // makeSentries creates some AI sentinels.
-func (lvl *level) makeSentries(eng vu.Engine, scene vu.Scene, levelNum int) {
+func (lvl *level) makeSentries(scene vu.Scene, levelNum int) {
 	sentinels := []*sentinel{}
 	numSentinels := gameMuster[levelNum]
 	for cnt := 0; cnt < numSentinels; cnt++ {
-		sentry := newSentinel(scene.AddPart(), levelNum, lvl.units)
+		sentry := newSentinel(scene.AddPart(), levelNum, lvl.units, lvl.fade)
 		sentry.setScale(0.25)
 		sentinels = append(sentinels, sentry)
 	}
@@ -307,7 +313,7 @@ func (lvl *level) collideSentinels() {
 	if lvl.player.cloaked {
 		return // player is immume from sentries.
 	}
-	pgx, pgy := lvl.cc.playerToGrid(lvl.scene.ViewLocation())
+	pgx, pgy := lvl.cc.playerToGrid(lvl.scene.Location())
 	for _, sentry := range lvl.sentries {
 		sgx, sgy := lvl.cc.playerToGrid(sentry.location())
 		if pgx == sgx && pgy == sgy {
@@ -331,7 +337,7 @@ func (lvl *level) collideSentinels() {
 // fetchCores picks up any nearby free cores if the core is in the
 // same grid element as the player. No need to check for actual collision.
 func (lvl *level) fetchCores() {
-	px, _, pz := lvl.scene.ViewLocation()
+	px, _, pz := lvl.scene.Location()
 	coreIndex := lvl.cc.hitCore(px, pz)
 
 	// attach the core to the player.
@@ -363,7 +369,7 @@ func (lvl *level) createCore() {
 	coresNeeded := energyNeeded / gameCellGain[lvl.num]
 	if lvl.cc.canDrop(coresNeeded) {
 		gridx, gridy := lvl.cc.dropSpot()
-		gamex, gamez := lvl.cc.dropCore(lvl.scene, gridx, gridy)
+		gamex, gamez := lvl.cc.dropCore(lvl.scene, lvl.fade, gridx, gridy)
 		lvl.hd.addCore(gamex, gamez)
 	}
 }
@@ -371,22 +377,28 @@ func (lvl *level) createCore() {
 // teleport puts the player back to the starting location, safe from
 // any sentinels. The up/down and view direction are also reset to
 // their original values in case the player has lost sight of the maze.
-func (lvl *level) teleport() {
-	if lvl.player.teleport() {
-		lvl.body.RemBody()
-		lvl.body.SetLocation(0, 0.5, 10)
-		lvl.body.SetRotation(0, 0, 0, 1)
-		lvl.scene.SetViewLocation(0, 0.5, 10)
-		lvl.scene.SetViewRotation(0, 0, 0, 1)
-		lvl.scene.SetViewTilt(0)
-		lvl.body.SetBody(vu.Sphere(0.25), 1, 0)
-		lvl.mp.ani.addAnimation(lvl.newTeleportAnimation())
+func (lvl *level) teleport(down int) {
+	if down == 1 {
+		if lvl.player.teleport() {
+			lvl.body.RemBody()
+			lvl.body.SetLocation(0, 0.5, 10)
+			lvl.body.SetRotation(0, 0, 0, 1)
+			lvl.scene.SetLocation(0, 0.5, 10)
+			lvl.scene.SetRotation(0, 0, 0, 1)
+			lvl.scene.SetTilt(0)
+			lvl.body.SetBody(vu.Sphere(0.25), 1, 0)
+			lvl.mp.ani.addAnimation(lvl.newTeleportAnimation())
+		}
 	}
 }
 
 // cloak toggles player cloaking. Cloaking only enables if there is
 // sufficient cloaking energy.
-func (lvl *level) cloak() { lvl.player.cloak(!lvl.player.cloaked) }
+func (lvl *level) cloak(down int) {
+	if down == 1 {
+		lvl.player.cloak(!lvl.player.cloaked)
+	}
+}
 
 // increaseCloak is a debug only method that greatly expands the cloaking time.
 func (lvl *level) increaseCloak() { lvl.player.cloakEnergy += lvl.player.cemax * 10 }

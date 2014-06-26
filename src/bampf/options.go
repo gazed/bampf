@@ -1,11 +1,10 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
 
 import (
 	"log"
-	"time"
 	"vu"
 )
 
@@ -16,91 +15,92 @@ import (
 //     game screen  : allows the user to map keys or quit the level.
 //     end screen   : allows the user to map keys or return to the start screen.
 type options struct {
-	area                               // Options fills up the full screen.
-	scene       vu.Scene               // Scene created at init.
-	mp          *bampf                 // Main program.
-	eng         vu.Engine              // 3D engine.
-	bg          vu.Part                // Gray out the screen when options are up.
-	buttons     []*button              // Option buttons.
-	buttonSize  int                    // Width and height of each button.
-	blocs       map[string]int         // Button index.
-	buttonGroup vu.Part                // Part to group buttons.
-	quit        *button                // Quit level button.
-	back        *button                // Back to game button.
-	info        *button                // Info/credits button.
-	mute        *button                // Mute toggle.
-	creditList  []vu.Part              // The info model.
-	reacts      map[string]vu.Reaction // User input handlers for this screen.
-	greacts     map[string]vu.Reaction // User input handlers for the game screen.
-	state       func(int)              // Tracks screen state.
-	mx, my      int                    // Current mouse locations.
-
-	// slow down user input handling for the options screen.
-	last time.Time     // last time a user request was processed.
-	hold time.Duration // delay between processing user requests.
+	area                    // Options fills up the full screen.
+	scene       vu.Scene    // Scene created at init.
+	mp          *bampf      // Main program.
+	eng         vu.Engine   // 3D engine.
+	bg          vu.Part     // Gray out the screen when options are up.
+	buttons     []*button   // Option buttons.
+	buttonSize  int         // Width and height of each button.
+	buttonGroup vu.Part     // Part to group buttons.
+	quit        *button     // Quit level button.
+	back        *button     // Back to game button.
+	info        *button     // Info/credits button.
+	mute        *button     // Mute toggle.
+	creditList  []vu.Part   // The info model.
+	reacts      ReactionSet // User input handlers for this screen.
+	greacts     ReactionSet // User input handlers for the game screen.
+	state       func(int)   // Tracks screen state.
+	mx, my      int         // Current mouse locations.
 }
+
+// mappable button ids
+const (
+	mForward   = "mForward"
+	mBack      = "mBack"
+	mLeft      = "mLeft"
+	mRight     = "mRight"
+	cloak      = "cloak"
+	teleport   = "teleport"
+	mForwardId = 0
+	mBackId    = 1
+	mLeftId    = 2
+	mRightId   = 3
+	cloakId    = 4
+	teleportId = 5
+)
+
+//	blocs       map[string]int // Button index.
 
 // options implements the screen interface.
 func (o *options) fadeIn() animation        { return nil }
 func (o *options) fadeOut() animation       { return nil }
 func (o *options) resize(width, height int) { o.handleResize(width, height) }
-func (o *options) update(input *vu.Input)   { o.handleUpdate(input) }
+func (o *options) update(in *vu.Input)      { o.handleUpdate(in) }
 func (o *options) transition(event int)     { o.state(event) }
 
 // newOptionsScreen creates the options screen. It needs the map of user actions
 // before the game screen becomes active.
-func newOptionsScreen(mp *bampf, gameReactions map[string]vu.Reaction) screen {
+func newOptionsScreen(mp *bampf, gameReactions ReactionSet) *options {
 	o := &options{}
 	o.state = o.deactive
 	o.mp = mp
 	o.eng = mp.eng
 	o.buttonSize = 64
-	o.last = time.Now()
-	o.hold, _ = time.ParseDuration("500ms")
 	o.scene = o.eng.AddScene(vu.VO)
 	o.scene.Set2D()
-	o.eng.SetOverlay(o.scene)
 	_, _, w, h := o.eng.Size()
 	o.handleResize(w, h)
-	o.bg = o.scene.AddPart()
-	o.bg.SetFacade("square", "flat").SetMaterial("tblack")
+	o.bg = o.scene.AddPart().SetLocation(float64(o.cx), float64(o.cy), 0)
 	o.bg.SetScale(float64(o.w), float64(o.h), 1)
-	o.bg.SetLocation(float64(o.cx), float64(o.cy), 0)
+	o.bg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
 
 	// the options screen reacts mostly to mouse clicks.
-	o.reacts = map[string]vu.Reaction{
-		"Lm":  vu.NewReactOnce("click", func() { o.click(o.mx, o.my) }),
-		"Esc": vu.NewReactOnce("options", func() { o.mp.toggleOptions() }),
-	}
+	o.reacts = NewReactionSet([]Reaction{
+		{"click", "Lm", func(i *vu.Input, down int) { o.click(i, down) }},
+	})
 	o.greacts = gameReactions
 
 	// ensure that the game buttons always appear in the same location
 	// by mapping reaction ids to button positions.
-	o.blocs = map[string]int{
-		"mForward": 0,
-		"mBack":    1,
-		"mLeft":    2,
-		"mRight":   3,
-		"cloak":    4,
-		"teleport": 5,
-	}
-	o.buttons = make([]*button, len(o.blocs))
+	o.buttons = make([]*button, teleportId+1)
 	o.buttonGroup = o.scene.AddPart()
-	o.createButtons(o.greacts)
+	o.createButtons()
 
 	// create the non-mappable buttons.
 	sz := o.buttonSize
-	o.info = newButton(o.eng, o.buttonGroup, sz/2, "info", vu.NewReaction("info", func() { o.rollCredits() }))
-	o.info.position(20, 20) // bottom left corner
-	o.mute = newButton(o.eng, o.buttonGroup, sz/2, "muteoff", vu.NewReaction("mute", func() { o.toggleMute() }))
-	o.mute.position(60, 20) // bottom left corner
+	o.info = newButton(o.buttonGroup, sz/2, "info", o.rollCredits)
+	o.info.position(30, 20) // bottom left corner
+	o.mute = newButton(o.buttonGroup, sz/2, "muteoff", o.toggleMute)
+	o.mute.position(70, 20) // bottom left corner
 	if o.mp.mute {
 		o.mute.setIcon("muteon")
 	}
-	o.back = newButton(o.eng, o.buttonGroup, sz/2, "back", vu.NewReaction("back", func() { o.mp.toggleOptions() }))
+	o.back = newButton(o.buttonGroup, sz/2, "back", o.mp.toggleOptions)
 	o.back.position(float64(o.w-20-o.back.w/2), 20) // bottom right corner
-	o.quit = newButton(o.eng, o.buttonGroup, sz/2, "quit", vu.NewReaction("quit", func() { o.mp.state(choose) }))
+	o.quit = newButton(o.buttonGroup, sz/2, "quit", o.mp.stopGame)
 	o.quit.position(float64(o.cx), 20) // bottom center of screen.
+	mp.eng.SetLastScene(o.scene)
 	o.scene.SetVisible(false)
 	return o
 }
@@ -109,7 +109,7 @@ func newOptionsScreen(mp *bampf, gameReactions map[string]vu.Reaction) screen {
 func (o *options) deactive(event int) {
 	switch event {
 	case activate:
-		o.reacts["Esc"] = vu.NewReactOnce("options", func() { o.mp.toggleOptions() })
+		o.reacts.Add(Reaction{"options", "Esc", o.mp.toggleOptions})
 		o.scene.SetVisible(true)
 		o.quit.setVisible(o.mp.gameStarted())
 		o.state = o.active
@@ -123,7 +123,7 @@ func (o *options) active(event int) {
 	switch event {
 	case evolve:
 	case deactivate:
-		delete(o.reacts, "Esc")
+		o.reacts.Rem("options")
 		o.scene.SetVisible(false)
 		o.state = o.deactive
 	default:
@@ -144,78 +144,65 @@ func (o *options) handleResize(width, height int) {
 }
 
 // handleUpdate processes user input.
-func (o *options) handleUpdate(input *vu.Input) {
-	o.mx, o.my = input.Mx, input.My
+func (o *options) handleUpdate(in *vu.Input) {
+	o.mx, o.my = in.Mx, in.My
 	o.hover()
-	if len(input.Down) > 0 && o.holdoff() {
-		return
-	}
-	for key, _ := range input.Down {
-		// don't allow mapping of reserved keys.
-		if key != "Esc" && key != "Sp" {
-			for _, btn := range o.buttons {
-				if btn.hover(o.mx, o.my) {
-					o.rebind(btn.action.Name(), key)
-					o.createButtons(o.greacts)
+	for key, down := range in.Down {
+		if down == 1 { // ignore key repeats.
+
+			// don't allow mapping of reserved keys.
+			if key != "Esc" && key != "Sp" {
+				for _, btn := range o.buttons {
+					if btn.hover(o.mx, o.my) {
+						o.rebind(o.greacts.Key(btn.id), key)
+						o.labelButtons()
+					}
 				}
 			}
-		}
-		if reaction, ok := o.reacts[key]; ok {
-			reaction.Do()
+			o.reacts.Respond(key, in, down)
 		}
 	}
-}
-
-// holdoff prevents user action spamming. Returning true means proceed with
-// action. True is only returned if enough time has passed since the last
-// true was returned.
-func (o *options) holdoff() bool {
-	if time.Now().After(o.last.Add(o.hold)) {
-		o.last = time.Now()
-		return false
-	}
-	return true
 }
 
 // createButtons makes the options buttons for mappable actions.
-func (o *options) createButtons(gameReactions map[string]vu.Reaction) {
+func (o *options) createButtons() {
 	sz := o.buttonSize
-	for key, reaction := range gameReactions {
-		id := reaction.Name()
-		if index, ok := o.blocs[id]; ok {
-			var b *button
-			if b = o.buttons[index]; b == nil {
-				b = newButton(o.eng, o.buttonGroup, sz, id, vu.NewReaction(key, func() {}))
-				o.buttons[index] = b
-			} else {
-				b = o.buttons[index]
-				b.action = vu.NewReaction(key, func() {})
-			}
-			b.label(o.eng, o.buttonGroup, key)
-		}
-	}
+	o.buttons[mForwardId] = newButton(o.buttonGroup, sz, mForward, func(in *vu.Input, down int) {})
+	o.buttons[mBackId] = newButton(o.buttonGroup, sz, mBack, func(in *vu.Input, down int) {})
+	o.buttons[mLeftId] = newButton(o.buttonGroup, sz, mLeft, func(in *vu.Input, down int) {})
+	o.buttons[mRightId] = newButton(o.buttonGroup, sz, mRight, func(in *vu.Input, down int) {})
+	o.buttons[cloakId] = newButton(o.buttonGroup, sz, cloak, func(in *vu.Input, down int) {})
+	o.buttons[teleportId] = newButton(o.buttonGroup, sz, teleport, func(in *vu.Input, down int) {})
+	o.labelButtons()
 	o.layout()
 }
 
+func (o *options) labelButtons() {
+	o.buttons[mForwardId].label(o.buttonGroup, o.greacts.Key(mForward))
+	o.buttons[mBackId].label(o.buttonGroup, o.greacts.Key(mBack))
+	o.buttons[mLeftId].label(o.buttonGroup, o.greacts.Key(mLeft))
+	o.buttons[mRightId].label(o.buttonGroup, o.greacts.Key(mRight))
+	o.buttons[cloakId].label(o.buttonGroup, o.greacts.Key(cloak))
+	o.buttons[teleportId].label(o.buttonGroup, o.greacts.Key(teleport))
+}
+
 // click is called when the user presses a left mouse button.
-func (o *options) click(mx, my int) {
-	for _, btn := range o.buttons {
-		if btn.clicked(mx, my) {
-			return // clicking a button results in call to Bind(key)
+func (o *options) click(i *vu.Input, down int) {
+	if down == 1 {
+		for _, btn := range o.buttons {
+			if btn.clicked(i, down) {
+				return // clicking a button results in call to Bind(key)
+			}
 		}
-	}
-	if o.mute.clicked(mx, my) || o.info.clicked(mx, my) ||
-		o.quit.clicked(mx, my) || o.back.clicked(mx, my) {
-		return
+		if o.mute.clicked(i, down) || o.info.clicked(i, down) ||
+			o.quit.clicked(i, down) || o.back.clicked(i, down) {
+			return
+		}
 	}
 }
 
 // layout positions the option screen buttons.
 func (o *options) layout() {
-	if len(o.buttons) != len(o.blocs) {
-		log.Printf("options.layout: forgot to adjust the button layout")
-		return
-	}
 	cx1 := o.cx
 	cy := o.cy + float64(2*o.buttonSize)
 	dy := 1.5 * float64(o.buttonSize)
@@ -233,25 +220,19 @@ func (o *options) layout() {
 		o.quit.position(float64(o.cx), 20) // bottom center of screen.
 	}
 	if o.back != nil {
-		o.back.position(float64(o.w-20-o.back.w/2), 20) // bottom right corner
+		o.back.position(float64(o.w-10-o.back.w/2), 20) // bottom right corner
 	}
 }
 
 // rebind changes the key for a given reaction. If the newKey is already used,
 // then it's reaction is bound to the oldKey. Otherwise the oldKey is dropped.
 func (o *options) rebind(oldKey, newKey string) {
-	reactions := o.greacts
-	if oldAction, ok := reactions[oldKey]; ok {
-		delete(reactions, oldKey)
-
-		// check if the new key was used in the mapping.  If it was then
-		// swap reactions with the new key.
-		if otherReaction, ok := reactions[newKey]; ok {
-			reactions[oldKey] = otherReaction
-		}
-		reactions[newKey] = oldAction
+	if id := o.greacts.Id(oldKey); id != "" {
+		o.greacts.Rebind(id, newKey)
+		o.persistBindings()
+	} else {
+		println("rebind could not find id for key", oldKey)
 	}
-	o.persistBindings()
 	return
 }
 
@@ -266,19 +247,18 @@ func (o *options) hover() {
 // across game restarts.
 func (o *options) persistBindings() {
 	mappedKeys := map[string]string{}
-	for boundName, _ := range o.blocs {
-		for key, val := range o.greacts {
-			if val.Name() == boundName {
-				mappedKeys[boundName] = key
-			}
-		}
-	}
+	mappedKeys[mForward] = o.greacts.Key(mForward)
+	mappedKeys[mBack] = o.greacts.Key(mBack)
+	mappedKeys[mLeft] = o.greacts.Key(mLeft)
+	mappedKeys[mRight] = o.greacts.Key(mRight)
+	mappedKeys[cloak] = o.greacts.Key(cloak)
+	mappedKeys[teleport] = o.greacts.Key(teleport)
 	saver := newSaver()
 	saver.persistBindings(mappedKeys)
 }
 
 // hide or display game credits.
-func (o *options) rollCredits() {
+func (o *options) rollCredits(in *vu.Input, down int) {
 	credits := []string{
 		"@galvanizedlogic.com",
 		"jewl",
@@ -289,13 +269,12 @@ func (o *options) rollCredits() {
 	credits = append(credits, info)
 	if o.creditList == nil {
 		o.creditList = []vu.Part{}
-		colour := "weblySleek16White"
+		tex := "weblySleek16White"
 		height := float64(45)
 		for _, credit := range credits {
-			banner := o.scene.AddPart()
-			banner.SetBanner(credit, "uv", "weblySleek16", colour)
-			banner.SetLocation(5, height, 0)
+			banner := o.scene.AddPart().SetLocation(20, height, 0)
 			banner.SetVisible(true)
+			banner.SetRole("uv").AddTex(tex).SetFont("weblySleek16").SetPhrase(credit)
 			height += 18
 			o.creditList = append(o.creditList, banner)
 		}
@@ -307,7 +286,7 @@ func (o *options) rollCredits() {
 }
 
 // toggleMute turns the game sound off or on.
-func (o *options) toggleMute() {
+func (o *options) toggleMute(in *vu.Input, down int) {
 	o.mp.setMute(!o.mp.mute)
 	if o.mp.mute {
 		o.mute.setIcon("muteon")

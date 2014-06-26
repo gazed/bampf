@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -24,11 +24,8 @@ type game struct {
 	state  func(int) int     // Current screen state.
 
 	// User input handlers for this screen.
-	reacts   map[string]vu.Reaction // User action map
-	moveDt   float64                // Delta amount for moves.
-	mx, my   int                    // Mouse locations.
-	mxp, myp int                    // Previous mouse locations.
-	dt       float64                // Update delta time.
+	reacts   ReactionSet // User action map
+	mxp, myp int         // Previous mouse locations.
 
 	// Debug variables
 	fly  bool     // Debug flying ability switch, see game_debug.go
@@ -44,11 +41,11 @@ type game struct {
 func (g *game) fadeIn() animation        { return g.newStartGameAnimation() }
 func (g *game) fadeOut() animation       { return g.newEndGameAnimation() }
 func (g *game) resize(width, height int) { g.handleResize(width, height) }
-func (g *game) update(input *vu.Input)   { g.handleUpdate(input) }
+func (g *game) update(in *vu.Input)      { g.handleUpdate(in) }
 func (g *game) transition(event int)     { g.state(event) }
 
 // newGameScreen initializes the gameplay screen.
-func newGameScreen(mp *bampf) (scr screen, reacts map[string]vu.Reaction) {
+func newGameScreen(mp *bampf) (scr *game, reacts ReactionSet) {
 	g := &game{}
 	g.state = g.deactive
 	g.mp = mp
@@ -61,7 +58,16 @@ func newGameScreen(mp *bampf) (scr screen, reacts map[string]vu.Reaction) {
 	g.levels = make(map[int]*level)
 
 	// user input handlers.
-	g.reacts = g.reactions()
+	g.reacts = NewReactionSet([]Reaction{
+		{mForward, "W", g.goForward},
+		{mBack, "S", g.goBack},
+		{mLeft, "A", g.goLeft},
+		{mRight, "D", g.goRight},
+		{cloak, "C", g.cloak},
+		{teleport, "T", g.teleport},
+		{"skip", "Sp", g.skipAnimation},
+	})
+	g.restoreBindings(g.reacts)
 	g.addDebugReactions(g)
 	return g, g.reacts
 }
@@ -74,10 +80,9 @@ func (g *game) deactive(event int) int {
 	case evolve:
 		g.setLevel(g.mp.launchLevel)
 		g.cl.setHudVisible(false)
-		g.cl.scene.SetViewTilt(75)
-		g.cl.scene.SetViewLocation(4, g.vr, 10)
+		g.cl.scene.SetTilt(75)
+		g.cl.scene.SetLocation(4, g.vr, 10)
 		g.cl.setBackgroundColour(g.cl.colour)
-		g.enableKeys()
 		g.eng.ShowCursor(false)
 		g.state = g.evolving
 	default:
@@ -153,14 +158,13 @@ func (g *game) evolving(event int) int {
 }
 
 // disableKeys disallows certain keys when the screen is not active.
-func (g *game) disableKeys() { delete(g.reacts, "Esc") }
+func (g *game) disableKeys() {
+	g.reacts.Rem("opts")
+}
 
 // enableKeys reenables deactivated keys.
 func (g *game) enableKeys() {
-	g.reacts["Esc"] = vu.NewReactOnce("options", func() { g.mp.toggleOptions() })
-	if lm, ok := g.reacts["Lm"]; ok {
-		lm.SetTime()
-	}
+	g.reacts.Add(Reaction{"opts", "Esc", g.mp.toggleOptions})
 	g.cl.updateKeys(g.reacts)
 }
 
@@ -173,47 +177,24 @@ func (g *game) handleResize(width, height int) {
 }
 
 // handleUpdate processes the user input.
-func (g *game) handleUpdate(input *vu.Input) {
-	g.mxp, g.myp = g.mx, g.my
-	g.dt, g.mx, g.my = input.Dt, input.Mx, input.My
+func (g *game) handleUpdate(in *vu.Input) {
 	if g.cl == nil { // no current level just yet... still starting.
 		return
 	}
 
-	// pre-process user input. Ensure that each simultaneous move request
-	// gets a portion of the total move amount.
-	g.moveDt = input.Dt * 2
-	for key, _ := range input.Down {
-		if reaction, ok := g.reacts[key]; ok {
-			rn := reaction.Name()
-			if rn == "mForward" || rn == "mBack" || rn == "mLeft" || rn == "mRight" {
-				g.moveDt *= 0.5
-			}
-		}
+	// react to user input.
+	shift := ""
+	if _, ok := in.Down["Sh"]; ok {
+		shift = "Sh-"
 	}
-
-	// react to all other user input.
-	for key, release := range input.Down {
-		if input.Shift {
-			key = "Sh-" + key
-		}
-		if reaction, ok := g.reacts[key]; ok {
-			reaction.Do()
-			rn := reaction.Name()
-
-			// limit how far away from the center a player can get.
-			if rn == "mForward" || rn == "mBack" || rn == "mLeft" || rn == "mRight" {
-				g.limitWandering(g.cl.scene)
-				if release < 0 {
-					g.cl.body.Stop()
-				}
-			}
-		}
+	for key, down := range in.Down {
+		g.reacts.Respond(shift+key, in, down)
 	}
 
 	// update the camera based on the mouse movements each time through the game loop.
-	xdiff, ydiff := float64(g.mx-g.mxp), float64(g.my-g.myp)
-	g.lens.look(g.cl.scene, g.spin, g.dt, xdiff, ydiff)
+	xdiff, ydiff := float64(in.Mx-g.mxp), float64(in.My-g.myp)
+	g.lens.look(g.cl.scene, g.spin, in.Dt, xdiff, ydiff)
+	g.mxp, g.myp = in.Mx, in.My
 
 	// update game state if the game is active and not transitioning betwen levels.
 	if g.state(query) == activate {
@@ -221,15 +202,15 @@ func (g *game) handleUpdate(input *vu.Input) {
 			g.cl.update()   // level specific updates.
 			g.evolveCheck() // check if the player is ready to evolve.
 		}
-		g.centerMouse() // keep centering the mouse.
+		g.centerMouse(in.Mx, in.My) // keep centering the mouse.
 	}
 }
 
 // centerMouse pops the mouse back to the center of the window, but only
 // when the mouse starts to stray too far away.
-func (g *game) centerMouse() {
+func (g *game) centerMouse(mx, my int) {
 	cx, cy := g.w/2, g.h/2
-	if math.Abs(float64(cx-g.mx)) > 200 || math.Abs(float64(cy-g.my)) > 200 {
+	if math.Abs(float64(cx-mx)) > 200 || math.Abs(float64(cy-my)) > 200 {
 		g.eng.SetCursorAt(g.w/2, g.h/2)
 	}
 }
@@ -237,7 +218,7 @@ func (g *game) centerMouse() {
 // limitWandering puts a limit on how far the player can get from the center
 // of the level. This allows the player to feel like they are traveling away
 // forever, but they can then return to the center in very little time.
-func (g *game) limitWandering(scene vu.Scene) {
+func (g *game) limitWandering(scene vu.Scene, down int) {
 	maxd := g.vr * 3                    // max allowed distance from center
 	cx, _, cz := g.cl.center.Location() // center location
 	x, y, z := g.cl.body.Location()     // player location
@@ -249,44 +230,44 @@ func (g *game) limitWandering(scene vu.Scene) {
 		g.cl.body.Stop()
 		g.cl.body.Push(-toc.X/100, 0, -toc.Z/100)
 	}
+	if down < 0 {
+		g.cl.body.Stop()
+	}
 }
 
-// reactions are the user input handlers. These are the default mappings and
-// will be used unless overridden by the user in this session or from a
-// previous sessions saved key mappings.
-func (g *game) reactions() map[string]vu.Reaction {
-	reactions := map[string]vu.Reaction{
-		"W":   vu.NewReaction("mForward", func() { g.lens.forward(g.cl.body, g.dt, g.run) }),
-		"S":   vu.NewReaction("mBack", func() { g.lens.back(g.cl.body, g.dt, g.run) }),
-		"A":   vu.NewReaction("mLeft", func() { g.lens.left(g.cl.body, g.dt, g.run) }),
-		"D":   vu.NewReaction("mRight", func() { g.lens.right(g.cl.body, g.dt, g.run) }),
-		"C":   vu.NewReactOnce("cloak", func() { g.cl.cloak() }),
-		"T":   vu.NewReactOnce("teleport", func() { g.cl.teleport() }),
-		"Esc": vu.NewReactOnce("options", func() { g.mp.toggleOptions() }),
-		"Sp":  vu.NewReactOnce("skip", func() { g.mp.ani.skip() }),
+// The game handlers.
+func (g *game) goForward(in *vu.Input, down int) {
+	g.lens.forward(g.cl.body, in.Dt, g.run)
+	g.limitWandering(g.cl.scene, down)
+}
+func (g *game) goBack(in *vu.Input, down int) {
+	g.lens.back(g.cl.body, in.Dt, g.run)
+	g.limitWandering(g.cl.scene, down)
+}
+func (g *game) goLeft(in *vu.Input, down int) {
+	g.lens.left(g.cl.body, in.Dt, g.run)
+	g.limitWandering(g.cl.scene, down)
+}
+func (g *game) goRight(in *vu.Input, down int) {
+	g.lens.right(g.cl.body, in.Dt, g.run)
+	g.limitWandering(g.cl.scene, down)
+}
+func (g *game) cloak(in *vu.Input, down int)    { g.cl.cloak(down) }
+func (g *game) teleport(in *vu.Input, down int) { g.cl.teleport(down) }
+func (g *game) skipAnimation(in *vu.Input, down int) {
+	if down == 1 {
+		g.mp.ani.skip()
 	}
-	return g.restoreBindings(reactions)
 }
 
 // restoreBindings overwrites the default bindings with saved bindings.
-func (g *game) restoreBindings(original map[string]vu.Reaction) map[string]vu.Reaction {
+func (g *game) restoreBindings(original ReactionSet) ReactionSet {
 	saver := newSaver()
 	fromDisk := saver.restore()
 	if len(fromDisk.Kmap) > 0 {
-		restored := map[string]vu.Reaction{}
-		for oKey, reaction := range original {
-			wasRestored := false
-			for boundName, mKey := range fromDisk.Kmap {
-				if boundName == reaction.Name() {
-					wasRestored = true
-					restored[mKey] = reaction
-				}
-			}
-			if !wasRestored {
-				restored[oKey] = reaction
-			}
+		for boundName, mKey := range fromDisk.Kmap {
+			original.Rebind(boundName, mKey)
 		}
-		return restored
 	}
 	return original
 }
@@ -295,10 +276,10 @@ func (g *game) restoreBindings(original map[string]vu.Reaction) map[string]vu.Re
 // in the build, and adds the extra debug reactions if it is.
 func (g *game) addDebugReactions(gi interface{}) {
 	if gd, ok := gi.(interface {
-		debugReactions() map[string]vu.Reaction
+		debugReactions() []Reaction
 	}); ok {
-		for key, val := range gd.debugReactions() {
-			g.reacts[key] = val
+		for _, val := range gd.debugReactions() {
+			g.reacts.Add(val)
 		}
 	}
 }
@@ -307,14 +288,15 @@ func (g *game) addDebugReactions(gi interface{}) {
 // the level. This is the trigger to complete the level.
 func (g *game) evolveCheck() {
 	if g.cl.isPlayerWorthy() {
-		gridx, gridy := g.cl.cc.playerToGrid(g.cl.scene.ViewLocation())
+		gridx, gridy := g.cl.cc.playerToGrid(g.cl.scene.Location())
 		if gridx == g.cl.gcx && gridy == g.cl.gcy {
 			if g.cl.num < 4 {
-				g.cl.center.SetTexture("drop1", 1)
 				g.cl.center.SetScale(1, 1, 1)
+				g.cl.center.Role().UseTex("drop1", 0)
+				g.cl.center.Role().SetUniform("spin", 1.0)
 				g.mp.ani.addAnimation(g.newEvolveAnimation(1))
 			} else if g.cl.num == 4 {
-				g.mp.state(done) // let bampf know that the game is over.
+				g.mp.state(doneGame) // let bampf know that the game is over.
 			}
 		}
 	}
@@ -330,10 +312,8 @@ func (g *game) healthUpdated(health, warn, high int) {
 		}
 	}
 	if g.cl.isPlayerWorthy() {
-		g.cl.center.SetTexture("drop2", 1)
 		g.cl.center.SetScale(1, 50, 1)
 	} else {
-		g.cl.center.SetTexture("drop1", 1)
 		g.cl.center.SetScale(1, 1, 1)
 	}
 }
@@ -359,13 +339,13 @@ func (g *game) newEndGameAnimation() animation {
 	return &fadeLevelAnimation{g: g, gstate: deactivate, dir: 1, ticks: 100, start: 0.5, stop: -g.vr}
 }
 func (g *game) newEvolveAnimation(dir int) animation {
-	g.cl.scene.SetViewTilt(0)
+	g.cl.scene.SetTilt(0)
 	fadeOut := &fadeLevelAnimation{g: g, gstate: -1, dir: dir, ticks: 100, start: 0.5, stop: g.vr * float64(-dir)}
 	transition := func() {
 		g.setLevel(g.cl.num + dir) // switch to the new level.
 		g.cl.setHudVisible(false)
-		g.cl.scene.SetViewTilt(75 * float64(dir))
-		g.cl.scene.SetViewLocation(4, g.vr*float64(dir), 10)
+		g.cl.scene.SetTilt(75 * float64(dir))
+		g.cl.scene.SetLocation(4, g.vr*float64(dir), 10)
 	}
 	fadeIn := &fadeLevelAnimation{g: g, gstate: activate, dir: dir, ticks: 100, start: g.vr * float64(dir), stop: 0.5}
 	return newTransitionAnimation(fadeOut, fadeIn, transition)
@@ -406,8 +386,8 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 		g, cl := f.g, f.g.cl
 		cl.colour += f.colr
 		cl.setBackgroundColour(cl.colour)
-		cl.scene.MoveView(0, -g.vr*float64(f.dir)/float64(f.ticks), 0)
-		g.lens.lookUpDown(cl.scene, float64(f.dir)*(75/float64(f.ticks))*2, g.spin, g.dt)
+		cl.scene.Move(0, -g.vr*float64(f.dir)/float64(f.ticks), 0)
+		g.lens.lookUpDown(cl.scene, float64(f.dir)*(75/float64(f.ticks))*2, g.spin, dt)
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -423,9 +403,9 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 // and stable location.
 func (f *fadeLevelAnimation) Wrap() {
 	g := f.g
-	x, _, z := g.cl.scene.ViewLocation()
-	g.cl.scene.SetViewLocation(x, 0.5, z)
-	g.cl.scene.SetViewTilt(0)
+	x, _, z := g.cl.scene.Location()
+	g.cl.scene.SetLocation(x, 0.5, z)
+	g.cl.scene.SetTilt(0)
 	g.lens = &fps{}
 	g.cl.setHudVisible(true)
 	g.cl.body.SetLocation(x, 0.5, z)

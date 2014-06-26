@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -58,7 +58,7 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 
 	// special case for a level 0 (start screen) trooper.
 	if tr.lvl == 0 {
-		cube := newCube(eng, tr.part, 0, 0, 0, 1)
+		cube := newCube(tr.part, 0, 0, 0, 1)
 		cube.edgeSort(1)
 		tr.bits = append(tr.bits, cube)
 		return tr
@@ -115,7 +115,7 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 				}
 				if newCells > 0 {
 					x, y, z := mx*centerOffset, my*centerOffset, mz*centerOffset
-					cube := newCube(eng, tr.part, x, y, z, float64(cubeSize))
+					cube := newCube(tr.part, x, y, z, float64(cubeSize))
 					cube.edgeSort(newCells)
 					tr.bits = append(tr.bits, cube)
 				}
@@ -150,11 +150,10 @@ func (tr *trooper) setLoc(x, y, z float64) { tr.part.SetLocation(x, y, z) }
 func (tr *trooper) addCenter() {
 	if tr.lvl > 0 {
 		cubeSize := 1.0 / float64(tr.lvl+1)
-		tr.center = tr.part.AddPart()
-		tr.center.SetCullable(false)
-		tr.center.SetFacade("cube", "flata").SetMaterial("tred")
 		scale := float64(tr.lvl-1) * cubeSize * 0.45 // leave a gap.
-		tr.center.SetScale(scale, scale, scale)
+		tr.center = tr.part.AddPart().SetScale(scale, scale, scale)
+		tr.center.SetRole("flata").SetMesh("cube").SetMaterial("tred")
+		tr.center.Role().SetUniform("fd", 1000)
 	}
 }
 
@@ -238,10 +237,9 @@ func (tr *trooper) detachCores(loss int) {
 // optional center cube.  Called when the trooper reaches full health.
 func (tr *trooper) merge() {
 	tr.trash()
-	tr.neo = tr.part.AddPart()
-	tr.neo.SetCullable(false)
-	tr.neo.SetFacade("cube", "flata").SetMaterial("tblue")
-	tr.neo.SetScale(0.5, 0.5, 0.5)
+	tr.neo = tr.part.AddPart().SetScale(0.5, 0.5, 0.5)
+	tr.neo.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
+	tr.neo.Role().SetUniform("fd", 1000)
 	tr.addCenter()
 }
 
@@ -442,7 +440,6 @@ func newPanel(eng vu.Engine, part vu.Part, x, y, z float64, level int) *panel {
 	p := &panel{}
 	p.eng = eng
 	p.part = part.AddPart()
-	p.part.SetCullable(false)
 	p.lvl = level
 	p.cubes = []*cube{}
 	p.cx, p.cy, p.cz = x, y, z
@@ -458,7 +455,7 @@ func newPanel(eng vu.Engine, part vu.Part, x, y, z float64, level int) *panel {
 // panel.
 func (p *panel) addCube(x, y, z, cubeSize float64) {
 	p.csize = cubeSize
-	c := newCube(p.eng, p.part, x, y, z, p.csize)
+	c := newCube(p.part, x, y, z, p.csize)
 	if (p.cx > p.cy && p.cx > p.cz) || (p.cx < p.cy && p.cx < p.cz) {
 		c.panelSort(1, 0, 0, 4)
 	} else if (p.cy > p.cx && p.cy > p.cz) || (p.cy < p.cx && p.cy < p.cz) {
@@ -499,11 +496,8 @@ func (p *panel) removeCell() {
 func (p *panel) merge() {
 	p.trash()
 	size := p.csize * 0.5
-	p.slab = p.part.AddPart()
-	p.slab.SetCullable(false)
-	p.slab.SetFacade("cube", "flata").SetMaterial("tblue")
+	p.slab = p.part.AddPart().SetLocation(p.cx, p.cy, p.cz)
 	scale := float64(p.lvl-1) * size
-	p.slab.SetLocation(p.cx, p.cy, p.cz)
 	if (p.cx > p.cy && p.cx > p.cz) || (p.cx < p.cy && p.cx < p.cz) {
 		p.slab.SetScale(size, scale, scale)
 	} else if (p.cy > p.cx && p.cy > p.cz) || (p.cy < p.cx && p.cy < p.cz) {
@@ -511,6 +505,8 @@ func (p *panel) merge() {
 	} else if (p.cz > p.cx && p.cz > p.cy) || (p.cz < p.cx && p.cz < p.cy) {
 		p.slab.SetScale(scale, scale, size)
 	}
+	p.slab.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
+	p.slab.Role().SetUniform("fd", 1000)
 }
 
 // trash clears any visible parts from the panel. It is up to calling methods
@@ -543,11 +539,9 @@ type cube struct {
 
 // newCube's are often started with cube size of 1 corner, 2 edges,
 // or 4 bottom side pieces.
-func newCube(eng vu.Engine, part vu.Part, x, y, z, cubeSize float64) *cube {
+func newCube(part vu.Part, x, y, z, cubeSize float64) *cube {
 	c := &cube{}
-	c.eng = eng
 	c.part = part.AddPart()
-	c.part.SetCullable(false)
 	c.cells = []vu.Part{}
 	c.cx, c.cy, c.cz, c.csize = x, y, z, cubeSize
 	c.ccnt, c.cmax = 0, 8
@@ -588,13 +582,12 @@ func (c *cube) panelSort(rx, ry, rz float64, startCount int) {
 
 // addCell creates and adds a new cell to the cube.
 func (c *cube) addCell() {
-	cell := c.part.AddPart()
-	cell.SetCullable(false)
-	cell.SetFacade("cube", "flata").SetMaterial("tgreen")
 	center := c.centers[c.ccnt-1]
-	cell.SetLocation(center.X, center.Y, center.Z)
+	cell := c.part.AddPart().SetLocation(center.X, center.Y, center.Z)
 	scale := c.csize * 0.20 // leave a gap (0.25 for no gap).
 	cell.SetScale(scale, scale, scale)
+	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
+	cell.Role().SetUniform("fd", 1000)
 	c.cells = append(c.cells, cell)
 }
 
@@ -602,6 +595,7 @@ func (c *cube) addCell() {
 func (c *cube) removeCell() {
 	last := len(c.cells)
 	c.part.RemPart(c.cells[last-1])
+	c.cells[last-1] = nil
 	c.cells = c.cells[:last-1]
 }
 
@@ -610,10 +604,9 @@ func (c *cube) removeCell() {
 // merge is called.
 func (c *cube) merge() {
 	c.trash()
-	cell := c.part.AddPart()
-	cell.SetCullable(false)
-	cell.SetFacade("cube", "flata").SetMaterial("tgreen")
-	cell.SetLocation(c.cx, c.cy, c.cz)
+	cell := c.part.AddPart().SetLocation(c.cx, c.cy, c.cz)
+	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
+	cell.Role().SetUniform("fd", 1000)
 	scale := (c.csize - (c.csize * 0.15)) * 0.5 // leave a gap (just c.csize for no gap)
 	cell.SetScale(scale, scale, scale)
 	c.cells = append(c.cells, cell)

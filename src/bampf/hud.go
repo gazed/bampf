@@ -1,4 +1,4 @@
-// Copyright © 2013 Galvanized Logic Inc.
+// Copyright © 2013-2014 Galvanized Logic Inc.
 // Use is governed by a FreeBSD license found in the LICENSE file.
 
 package main
@@ -87,9 +87,8 @@ func (hd *hud) update(sc vu.Scene, sentries []*sentinel) { hd.mm.update(sc, sent
 // cloakingEffect creates the model shown when the user cloaks.
 func (hd *hud) cloakingEffect(scene vu.Scene) vu.Part {
 	ce := scene.AddPart()
-	ce.SetFacade("icon", "uv").SetMaterial("half")
-	ce.SetTexture("cloakon", 0)
 	ce.SetVisible(false)
+	ce.SetRole("uv").SetMesh("icon").AddTex("cloakon").SetMaterial("half")
 	return ce
 }
 func (hd *hud) cloakingActive(isActive bool) { hd.ce.SetVisible(isActive) }
@@ -97,25 +96,27 @@ func (hd *hud) cloakingActive(isActive bool) { hd.ce.SetVisible(isActive) }
 // teleportEffect creates the model shown when the user teleports.
 func (hd *hud) teleportEffect(scene vu.Scene) vu.Part {
 	te := scene.AddPart()
-	te.SetFacade("icon", "uvra").SetMaterial("half")
-	te.SetTexture("smoke", 10)
 	te.SetVisible(false)
+	te.SetRole("uvra").SetMesh("icon").AddTex("smoke").SetMaterial("half")
+	te.Role().SetUniform("spin", 10.0)
+	te.Role().SetUniform("fd", 1000)
 	return te
 }
 func (hd *hud) teleportActive(isActive bool) { hd.te.SetVisible(isActive) }
-func (hd *hud) teleportFade(alpha float64)   { hd.te.SetAlpha(alpha) }
+func (hd *hud) teleportFade(alpha float64)   { hd.te.Role().SetAlpha(alpha) }
 
 // energyLossEffect creates the model shown when the player gets hit
 // by a sentinel.
 func (hd *hud) energyLossEffect(scene vu.Scene) vu.Part {
 	ee := scene.AddPart()
-	ee.SetFacade("icon", "uvra").SetMaterial("half")
-	ee.SetTexture("loss", 0)
 	ee.SetVisible(false)
+	ee.SetRole("uvra").SetMesh("icon").AddTex("loss").SetMaterial("half")
+	ee.Role().SetUniform("fd", 1000)
+	ee.Role().SetUniform("spin", 2.0)
 	return ee
 }
 func (hd *hud) energyLossActive(isActive bool) { hd.ee.SetVisible(isActive) }
-func (hd *hud) energyLossFade(alpha float64)   { hd.ee.SetAlpha(alpha) }
+func (hd *hud) energyLossFade(alpha float64)   { hd.ee.Role().SetAlpha(alpha) }
 
 // hud
 // ===========================================================================
@@ -135,11 +136,8 @@ type player struct {
 func newPlayer(eng vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *player {
 	pl := &player{}
 	pl.cx, pl.cy = 100, 100
-	pl.bg = scene.AddPart()
-	pl.bg.SetFacade("icon", "uvm").SetMaterial("green")
-	pl.bg.SetTexture("hudbg", 0)
-	pl.bg.SetScale(110, 110, 1)
-	pl.bg.SetLocation(pl.cx, pl.cy, 0)
+	pl.bg = scene.AddPart().SetLocation(pl.cx, pl.cy, 0).SetScale(110, 110, 1)
+	pl.bg.SetRole("uvm").SetMesh("icon").AddTex("hudbg").SetMaterial("green")
 	return pl
 }
 
@@ -172,8 +170,11 @@ type xpbar struct {
 	tbg    vu.Part  // Teleport energy background bar.
 	tfg    vu.Part  // Teleport energy foreground bar.
 	hb     vu.Part  // Display health amount.
+	hbw    int      // Display health width in pixels.
 	tk     vu.Part  // Display teleport key.
+	tkw    int      // Display key width in pixels.
 	ck     vu.Part  // Display cloak key.
+	ckw    int      // Display key width in pixels.
 	tr     *trooper // Current player injected with SetStage.
 }
 
@@ -187,38 +188,36 @@ func newXpbar(e vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *xpbar
 
 	// add the xp background and foreground bars.
 	xp.bg = scene.AddPart()
-	xp.bg.SetFacade("square", "flat").SetMaterial("tblack")
+	xp.bg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
 	xp.fg = scene.AddPart()
-	xp.fg.SetFacade("icon", "uv").SetMaterial("green")
-	xp.fg.SetTexture("xpgreen", 0)
+	xp.fg.SetRole("uv").SetMesh("icon").AddTex("xpgreen").SetMaterial("green")
 
 	// add the xp bar text.
 	xp.hb = scene.AddPart()
-	xp.hb.SetBanner("0", "uv", "weblySleek22", "weblySleek22White")
-	bw := xp.hb.BannerWidth()
-	xp.hb.SetLocation(xp.cx-float64(bw/2), xp.cy*0.5-5, 0)
+	xp.hb.SetRole("uv").AddTex("weblySleek22White").SetFont("weblySleek22")
+	xp.hbw, _ = xp.hb.Role().SetPhrase("0")
 
 	// teleport energy background and foreground bars.
 	xp.tbg = scene.AddPart()
-	xp.tbg.SetFacade("square", "flat").SetMaterial("tblack")
+	xp.tbg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
 	xp.tfg = scene.AddPart()
-	xp.tfg.SetFacade("icon", "uv").SetMaterial("green")
-	xp.tfg.SetTexture("xpblue", 0)
+	xp.tfg.SetRole("uv").SetMesh("icon").AddTex("xpblue").SetMaterial("green")
 
 	// the teleport bar text.
 	xp.tk = scene.AddPart()
-	xp.tk.SetBanner("0", "uv", "weblySleek16", "weblySleek16White")
+	xp.tk.SetRole("uv").AddTex("weblySleek16White").SetFont("weblySleek16")
+	xp.tkw, _ = xp.tk.Role().SetPhrase("0")
 
 	// cloak energy background and foreground bars.
 	xp.cbg = scene.AddPart()
-	xp.cbg.SetFacade("square", "flat").SetMaterial("tblack")
+	xp.cbg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
 	xp.cfg = scene.AddPart()
-	xp.cfg.SetFacade("icon", "uv").SetMaterial("green")
-	xp.cfg.SetTexture("xpblue", 0)
+	xp.cfg.SetRole("uv").SetMesh("icon").AddTex("xpblue").SetMaterial("green")
 
 	// the cloak bar text.
 	xp.ck = scene.AddPart()
-	xp.ck.SetBanner("0", "uv", "weblySleek16", "weblySleek16White")
+	xp.ck.SetRole("uv").AddTex("weblySleek16White").SetFont("weblySleek16")
+	xp.ckw, _ = xp.ck.Role().SetPhrase("0")
 	xp.resize(screenWidth, screenHeight)
 	return xp
 }
@@ -226,20 +225,20 @@ func newXpbar(e vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *xpbar
 // resize adjusts the graphics to fit the new window dimensions.
 func (xp *xpbar) resize(screenWidth, screenHeight int) {
 	xp.setSize(screenWidth, screenHeight)
-	xp.bg.SetLocation(xp.cx, xp.cy, 1)
+	xp.bg.SetLocation(xp.cx+5, xp.cy+5, 1)
 	xp.bg.SetScale(float64(xp.bw/2), float64(xp.bh-xp.y), 1)
 
 	// adjust the teleport energy bar.
-	xp.tbg.SetLocation(xp.cx-float64(xp.w)/10-2, xp.cy+30, 1)
+	xp.tbg.SetLocation(xp.cx-float64(xp.w)/10, xp.cy+35, 1)
 	xp.tbg.SetScale(float64(xp.bw/10), float64(xp.bh-xp.y)-5, 1)
-	bw := xp.tk.BannerWidth()
-	xp.tk.SetLocation(xp.cx-float64(xp.bw)/10-2-float64(bw/2), xp.cy+21, 0)
+	bw := xp.tkw
+	xp.tk.SetLocation(xp.cx-float64(xp.bw)/10-float64(bw/2), xp.cy+26, 0)
 
 	// adjust the cloaking energy bar.
-	xp.cbg.SetLocation(xp.cx+float64(xp.bw)/10+2, xp.cy+30, 1)
+	xp.cbg.SetLocation(xp.cx+float64(xp.bw)/10, xp.cy+35, 1)
 	xp.cbg.SetScale(float64(xp.bw/10), float64(xp.bh-xp.y)-5, 1)
-	bw = xp.ck.BannerWidth()
-	xp.ck.SetLocation(xp.cx+float64(xp.bw)/10+2-float64(bw/2), xp.cy+21, 0)
+	bw = xp.ckw
+	xp.ck.SetLocation(xp.cx+float64(xp.bw)/10-float64(bw/2), xp.cy+26, 0)
 
 	// adjust the energy amounts for the bars.
 	if xp.tr != nil {
@@ -261,20 +260,19 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 	maxCores := high / gameCellGain[xp.tr.lvl-1]
 	coresNeeded := (high - health) / gameCellGain[xp.tr.lvl-1]
 	coreCount := strconv.Itoa(maxCores-coresNeeded) + "/" + strconv.Itoa(maxCores)
-	xp.hb.UpdateBanner(coreCount)
-	bw := xp.hb.BannerWidth()
-	xp.hb.SetLocation(xp.cx-float64(bw/2), xp.cy*0.5-5, 0)
+	xp.hbw, _ = xp.hb.Role().SetPhrase(coreCount)
+	xp.hb.SetLocation(xp.cx-float64(xp.hbw/2), xp.cy*0.5, 0)
 
 	// turn on the warning colour if player has less than the starting amount of cores.
 	barMax := float64(xp.bw/2 - xp.linew)
 	if health >= warn {
-		xp.fg.SetTexture("xpcyan", 0)
+		xp.fg.Role().UseTex("xpcyan", 0)
 	} else {
-		xp.fg.SetTexture("xpred", 0)
+		xp.fg.Role().UseTex("xpred", 0)
 	}
 	healthBar := float64(health) / float64(high) * barMax
 	zeroSpot := float64(xp.border) + healthBar + float64(xp.linew-xp.border)
-	xp.fg.SetLocation(zeroSpot, xp.cy, 0)
+	xp.fg.SetLocation(zeroSpot+5, xp.cy+5, 0)
 	xp.fg.SetScale(healthBar, float64(xp.bh-xp.y-xp.linew)-1, 1)
 }
 
@@ -282,15 +280,15 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 func (xp *xpbar) energyUpdated(teleportEnergy, tmax, cloakEnergy, cmax int) {
 	tratio := float64(teleportEnergy) / float64(tmax)
 	if tratio == 1.0 {
-		xp.tfg.SetTexture("xpblue", 0)
+		xp.tfg.Role().UseTex("xpblue", 0)
 	} else {
-		xp.tfg.SetTexture("xpred", 0)
+		xp.tfg.Role().UseTex("xpred", 0)
 	}
-	xp.tfg.SetLocation(xp.cx-float64(xp.w)/10-2, xp.cy+30, 0)
-	xp.tfg.SetScale((float64(xp.bw/10)-2)*tratio, float64(xp.bh-xp.y)-7, 1)
+	xp.tfg.SetLocation(xp.cx-float64(xp.w)/10, xp.cy+35, 0)
+	xp.tfg.SetScale((float64(xp.bw/10))*tratio, float64(xp.bh-xp.y)-7, 1)
 	cratio := float64(cloakEnergy) / float64(cmax)
-	xp.cfg.SetLocation(xp.cx+float64(xp.w)/10+2, xp.cy+30, 0)
-	xp.cfg.SetScale((float64(xp.bw/10)-2)*cratio, float64(xp.bh-xp.y)-7, 1)
+	xp.cfg.SetLocation(xp.cx+float64(xp.w)/10-1, xp.cy+35, 0)
+	xp.cfg.SetScale((float64(xp.bw/10))*cratio, float64(xp.bh-xp.y)-7, 1)
 }
 
 // setLevel sets the xpbars values and must be called at least once before rendering.
@@ -306,8 +304,8 @@ func (xp *xpbar) setLevel(lvl *level) {
 // mappings are changed.
 func (xp *xpbar) updateKeys(teleportKey, cloakKey string) {
 	if xp.tk != nil && xp.ck != nil {
-		xp.tk.UpdateBanner(teleportKey)
-		xp.ck.UpdateBanner(cloakKey)
+		xp.tk.Role().SetPhrase(teleportKey)
+		xp.ck.Role().SetPhrase(cloakKey)
 	}
 }
 
@@ -339,7 +337,7 @@ func newMinimap(eng vu.Engine, numTroops int) *minimap {
 	mm.scale = float64(5)
 	mm.cores = []vu.Part{}
 	mm.scene = eng.AddScene(vu.XZ_XY)
-	mm.scene.SetVisibleRadius(float64(mm.radius))
+	mm.scene.SetCuller(vu.NewRadiusCuller(float64(mm.radius)))
 	mm.scene.Set2D()
 	mm.setSize(eng.Size())
 
@@ -349,27 +347,22 @@ func newMinimap(eng vu.Engine, numTroops int) *minimap {
 	mm.part.SetLocation(float64(mm.x), 0, float64(-mm.y))
 
 	// add the white background.
-	mm.bg = mm.part.AddPart()
-	mm.bg.SetFacade("icon_xz", "uvm").SetMaterial("green")
-	mm.bg.SetTexture("hudbg", 0)
-	mm.bg.SetScale(110, 1, 110)
+	mm.bg = mm.part.AddPart().SetScale(110, 1, 110)
+	mm.bg.SetRole("uvm").SetMesh("icon_xz").AddTex("hudbg").SetMaterial("green")
 
 	// create the sentinel position markers
 	mm.spms = []vu.Part{}
 	for cnt := 0; cnt < numTroops; cnt++ {
-		tpm := mm.part.AddPart()
-		tpm.SetFacade("square_xz", "flat").SetMaterial("tred")
-		tpm.SetScale(mm.scale, mm.scale, mm.scale)
+		tpm := mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
+		tpm.SetRole("flat").SetMesh("square_xz").SetMaterial("tred")
 		mm.spms = append(mm.spms, tpm)
 	}
 
 	// create the player marker and center map marker.
-	mm.cpm = mm.part.AddPart()
-	mm.cpm.SetFacade("square_xz", "flat").SetMaterial("blue")
-	mm.cpm.SetScale(mm.scale, mm.scale, mm.scale)
-	mm.ppm = mm.part.AddPart()
-	mm.ppm.SetFacade("tri_xz", "flat").SetMaterial("tblack")
-	mm.ppm.SetScale(mm.scale, mm.scale, mm.scale)
+	mm.cpm = mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
+	mm.cpm.SetRole("flat").SetMesh("square_xz").SetMaterial("blue")
+	mm.ppm = mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
+	mm.ppm.SetRole("flat").SetMesh("tri_xz").SetMaterial("tblack")
 	return mm
 }
 
@@ -388,40 +381,38 @@ func (mm *minimap) resize(width, height int) {
 // setSize adjusts the scene perspective to the given window size.
 // Generally this is 1 pixel to 1 unit for HUD type scenes.
 func (mm *minimap) setSize(x, y, width, height int) {
-	mm.x, mm.y, mm.w, mm.h = width-mm.radius-10, 120, width, height
+	mm.x, mm.y, mm.w, mm.h = width-mm.radius-10, 125, width, height
 	mm.scene.SetOrthographic(0, float64(mm.w), 0, float64(mm.h), 0, 10)
 }
 
 // setLevel is called when a level transition happens.
 func (mm *minimap) setLevel(sc vu.Scene, lvl *level) {
-	x, y, z := sc.ViewLocation()
-	mm.scene.SetViewLocation(x*mm.scale, y*mm.scale, z*mm.scale)
+	x, y, z := sc.Location()
+	mm.scene.SetLocation(x*mm.scale, y*mm.scale, z*mm.scale)
 
 	// adjust the center location based on the game maze center.
 	mm.cx, mm.cy = float64(lvl.gcx*lvl.units)*mm.scale, float64(-lvl.gcy*lvl.units)*mm.scale
 	mm.ppm.SetLocation(x, y, z)
 	mm.bg.SetLocation(x, y, z)
-	mm.ppm.SetRotation(sc.ViewRotation())
+	mm.ppm.SetRotation(sc.Rotation())
 	mm.setSentryLocations(lvl.sentries)
 	lvl.player.monitorHealth("mmap", mm)
 }
 
 // addWall adds a block representing a wall to the minimap.
 func (mm *minimap) addWall(x, y float64) {
-	wall := mm.part.AddPart()
-	wall.SetFacade("square_xz", "flat").SetMaterial("gray")
-	wall.SetLocation(x*mm.scale, 0, y*mm.scale)
+	wall := mm.part.AddPart().SetLocation(x*mm.scale, 0, y*mm.scale)
 	wall.SetScale(mm.scale, mm.scale, mm.scale)
+	wall.SetRole("flat").SetMesh("square_xz").SetMaterial("gray")
 }
 
 // addCore adds a small block representing an energy core to the minimap.
 func (mm *minimap) addCore(x, y float64) {
 	scale := mm.scale
-	cm := mm.part.AddPart()
-	cm.SetFacade("square_xz", "flat").SetMaterial("green")
-	cm.SetLocation(x*scale, 0, y*scale)
+	cm := mm.part.AddPart().SetLocation(x*scale, 0, y*scale)
 	scale *= 0.5
 	cm.SetScale(scale, scale, scale)
+	cm.SetRole("flat").SetMesh("square_xz").SetMaterial("green")
 	mm.cores = append(mm.cores, cm)
 }
 
@@ -454,20 +445,20 @@ func (mm *minimap) resetCores() {
 // based on the player health.
 func (mm *minimap) healthUpdated(health, warn, high int) {
 	if health == high {
-		mm.cpm.SetMaterial("green")
+		mm.cpm.Role().SetMaterial("green")
 	} else {
-		mm.cpm.SetMaterial("blue")
+		mm.cpm.Role().SetMaterial("blue")
 	}
 }
 
 // update adjusts the minimap according to the players new position.
 func (mm *minimap) update(sc vu.Scene, sentries []*sentinel) {
 	scale := mm.scale
-	x, y, z := sc.ViewLocation()
+	x, y, z := sc.Location()
 	x, y, z = x*scale, y*scale, z*scale
-	mm.scene.SetViewLocation(x, y, z)
+	mm.scene.SetLocation(x, y, z)
 	mm.setPlayerLocation(x, y, z)
-	mm.setPlayerRotation(sc.ViewRotation())
+	mm.setPlayerRotation(sc.Rotation())
 	mm.setCenterLocation(x, y, z)
 	mm.setSentryLocations(sentries)
 }
