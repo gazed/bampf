@@ -1,5 +1,5 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 // Package bampf is a 3D arcade collection game with random levels.
 // Bampf is the sound made when players teleport to safety.
@@ -7,31 +7,37 @@
 // The subdirectories contain the game resource data.
 package main
 
+// Dev Notes:
 // The main purpose of bampf is to test the vu (virtual universe) engine.
 
 import (
-	"log"
+	"container/list"
+	"math/rand"
 	"runtime/debug"
+	"time"
 	"vu"
 )
 
-// main initializes the data structures and the game engine.
+// main recovers saved preferences and initializes the game.
 func main() {
 	mp := &bampf{}
-	mp.state = mp.launching
-
-	// recover the saved preferences and initialize the engine.
 	var err error
 	var x, y int
 	x, y, mp.wx, mp.wy, mp.mute = mp.prefs()
 	if mp.eng, err = vu.New("Bampf", x, y, mp.wx, mp.wy); err != nil {
-		log.Printf("Failed to initialize engine %s", err)
+		logf("Failed to initialize engine %s", err)
 		return
 	}
-	defer mp.eng.Shutdown()
-
-	// SetDirector registers bampf and results in an engine callback to Create().
+	mp.setLogger(mp)
 	mp.eng.SetDirector(mp)
+	mp.create()
+	defer mp.eng.Shutdown()
+	defer func() {
+		if r := recover(); r != nil {
+			logf("Panic %s: %s Shutting down.", r, debug.Stack())
+		}
+	}()
+	mp.eng.Action() // run the engine until the user decides to quit.
 }
 
 // version is set by the build using ld flags. Eg.
@@ -47,42 +53,43 @@ var version string
 //   1. Prepare and share the initial state and data structures.
 //   2. Ensure orderly switching between game states.
 type bampf struct {
-	eng         vu.Engine // Game engine and user input.
-	state       func(int) // Overall application state.
-	launch      *launch   // Initial choosing screen.
-	game        *game     // Main game play screen.
-	end         *end      // Final "you won" screen.
-	options     *options  // Options screen.
-	active      screen    // Currently drawn screen (state).
-	prior       screen    // Last active screen. Needed for toggling options.
-	mute        bool      // Track if the sound is on or off.
-	wx, wy      int       // Application window size.
-	ani         *animator // Handles short animations.
-	launchLevel int       // Choosen by the user on the launch screen.
+	eng         vu.Engine  // Game engine and user input.
+	state       gameState  // Which main screen is active.
+	launch      *launch    // Initial choosing screen.
+	game        *game      // Main game play screen.
+	end         *end       // Final "you won" screen.
+	config      *config    // Options screen.
+	active      screen     // Currently drawn screen (state).
+	eventq      *list.List // Game event queue.
+	mute        bool       // Track if the sound is on or off.
+	wx, wy      int        // Application window size.
+	ani         *animator  // Handles short animations.
+	launchLevel int        // Choosen by the user on the launch screen.
+	keys        []string   // Restored key bindings.
 }
 
-// Overall application state transitions. These are used as input
-// parameters to the bampf.state methods.
+// Game state transition constants are passed to game state methods which
+// result in new game state.
 const (
 	chooseGame = iota // Transition to the choosing state.
+	configGame        // Transition to the options and preferences.
 	playGame          // Transition to the playing state.
-	doneGame          // Transition to the finished state.
+	finishGame        // Transition to the finished state.
 )
 
-// Create is run after engine intialization. The initial game screens are
-// created and the main action/update loop is started. All subsequent calls
-// from the engine will be to Update().
-func (mp *bampf) Create(eng vu.Engine) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Panic %s: %s Shutting down.", r, debug.Stack())
-		}
-	}()
+// Game state is realized through functions that process game state transitions
+type gameState func(int) gameState
+
+// create the game screens before the main action/update loop is started.
+func (mp *bampf) create() {
+	rand.Seed(time.Now().UnixNano())
 	mp.ani = &animator{}
 	mp.setMute(mp.mute)
+	mp.eventq = list.New()
 	mp.createScreens()
-	mp.state(chooseGame)
-	mp.eng.Action() // run the engine until the user decides to quit.
+	mp.state = mp.choosing
+	mp.active = mp.launch
+	mp.active.activate(screenActive)
 }
 
 // Update is a regular engine callback and is passed onto the currently
@@ -93,93 +100,130 @@ func (mp *bampf) Update(in *vu.Input) {
 		mp.resize()
 	}
 	if in.Focus {
-		mp.ani.animate(in.Dt) // run active animations
-		if mp.active != nil {
-			mp.active.update(in)
+		mp.ani.animate(in.Dt)                 // run active animations
+		mp.active.processInput(in, mp.eventq) // user input to game events.
+		for mp.eventq.Len() > 0 {
+			transition := mp.active.processEvents(mp.eventq)
+			mp.state = mp.state(transition)
 		}
 	}
 }
 
-// createScreens creates the different application screens and anything else
-// needed before the render loop takes over. There is a dependency between
-// screens that need key-bindings that means the game screen must be
-// created first.
+// createScreens creates the different application screens and anything
+// else needed before the render loop takes over.
 func (mp *bampf) createScreens() *bampf {
-	gameScreen, gameReactions := newGameScreen(mp)
 	mp.launch = newLaunchScreen(mp)
-	mp.game = gameScreen
+	mp.game = newGameScreen(mp)
 	mp.end = newEndScreen(mp)
-	mp.options = newOptionsScreen(mp, gameReactions)
+	mp.config = newConfigScreen(mp, mp.keys)
 	mp.eng.Enable(vu.BLEND, true)
 	mp.eng.Enable(vu.CULL, true)
 	mp.eng.Enable(vu.DEPTH, true)
 	mp.eng.Color(1.0, 1.0, 1.0, 1)
-	return mp
-}
 
-// launching state is the first game state with a single transition to the
-// initial game screen where the user chooses the starting level.
-func (mp *bampf) launching(event int) {
-	switch event {
-	case chooseGame:
-		mp.active = mp.launch
-		mp.active.transition(activate)
-		mp.state = mp.choosing
-	default:
-		log.Printf("launching state: invalid transition %d", event)
+	// ensure game has a intial set of keys.
+	mp.game.setKeys(mp.keys)
+	if len(mp.keys) != len(mp.config.keys) {
+		mp.game.setKeys(mp.config.keys)
 	}
+	return mp
 }
 
 // choosing state is where the user is choosing a starting level. The game
 // transitions to the playing state once player has made a choice.
-func (mp *bampf) choosing(event int) {
+func (mp *bampf) choosing(event int) gameState {
 	switch event {
+	case configGame:
+		mp.config.setExitTransition(chooseGame)
+		mp.active = mp.config
+		mp.active.activate(screenActive)
+		return mp.configuring
 	case playGame:
 		mp.transitionToGameScreen()
-		mp.state = mp.playing
+		return mp.playing
+	case chooseGame:
 	default:
-		log.Printf("choosing state: invalid transition %d", event)
+		logf("choosing: invalid transition %d", event)
 	}
+	return mp.choosing
+}
+
+// configuring state is where the user is rebinding keys or changing
+// game options.
+func (mp *bampf) configuring(event int) gameState {
+	switch event {
+	case chooseGame:
+		mp.active = mp.launch
+		mp.active.activate(screenActive)
+		return mp.choosing
+	case playGame:
+		mp.active = mp.game
+		mp.active.activate(screenActive)
+		return mp.playing
+	case finishGame:
+		mp.active = mp.end
+		mp.active.activate(screenActive)
+		return mp.finishing
+	case configGame:
+	default:
+		logf("configuring: invalid transition %d", event)
+	}
+	return mp.configuring
 }
 
 // playing state is where the user is working through the game levels.
 // The user can complete or cancel the game.
-func (mp *bampf) playing(event int) {
+func (mp *bampf) playing(event int) gameState {
 	switch event {
-	case doneGame:
+	case configGame:
+		mp.active.activate(screenPaused)
+		mp.config.setExitTransition(playGame)
+		mp.active = mp.config
+		mp.active.activate(screenActive)
+		return mp.configuring
+	case finishGame:
 		mp.transitionToEndScreen()
-		mp.state = mp.finishing
+		return mp.finishing
 	case chooseGame:
-		mp.returnToMenu()
-		mp.state = mp.choosing
+	case playGame:
 	default:
-		log.Printf("playing state: invalid transition %d", event)
+		logf("playing: invalid transition %d", event)
 	}
+	return mp.playing
 }
 
 // finishing state is where the user has finished the final level.
 // The end game animation is displayed. The user has the option of going back
 // to the choosing screen and starting again.
-func (mp *bampf) finishing(event int) {
+func (mp *bampf) finishing(event int) gameState {
 	switch event {
 	case chooseGame:
 		mp.returnToMenu()
-		mp.state = mp.choosing
+		return mp.choosing
+	case configGame:
+		mp.config.setExitTransition(finishGame)
+		mp.active = mp.config
+		mp.active.activate(screenActive)
+		return mp.configuring
+	case finishGame:
 	default:
-		log.Printf("finishing state: invalid transition %d", event)
+		logf("finishing: invalid transition %d", event)
 	}
+	return mp.finishing
 }
 
 // transitionToGameScreen happens when the player chooses play from the
 // launch screen.
 func (mp *bampf) transitionToGameScreen() {
+	mp.active.activate(screenEvolving)
 	fadeOut := mp.launch.fadeOut()
 	fadeIn := mp.game.fadeIn()
-	transition := func() {
+	mid := func() {
 		mp.active = mp.game
-		mp.active.transition(evolve)
+		mp.game.setLevel(mp.launchLevel)
+		mp.active.activate(screenEvolving)
 	}
-	mp.ani.addAnimation(newTransitionAnimation(fadeOut, fadeIn, transition))
+	mp.ani.addAnimation(newTransitionAnimation(fadeOut, fadeIn, mid))
 }
 
 // transitionToEndScreen happens when the player manages to get through the
@@ -187,52 +231,30 @@ func (mp *bampf) transitionToGameScreen() {
 func (mp *bampf) transitionToEndScreen() {
 	fadeOut := mp.game.fadeOut()
 	fadeIn := mp.end.fadeIn()
-	transition := func() {
+	mid := func() {
 		mp.active = mp.end
-		mp.active.transition(activate)
+		mp.active.activate(screenEvolving)
 	}
-	mp.ani.addAnimation(newTransitionAnimation(fadeOut, fadeIn, transition))
+	mp.ani.addAnimation(newTransitionAnimation(fadeOut, fadeIn, mid))
 }
 
 // returnToMenu cancels the current game and returns the player
 // to the start menu in order to choose a new game.
+// This is triggered from the game screen.
 func (mp *bampf) returnToMenu() {
-	mp.prior.transition(deactivate)
-	mp.active.transition(deactivate)
+	mp.config.activate(screenDeactive)
+	mp.game.activate(screenDeactive)
+	mp.end.activate(screenDeactive)
 	mp.active = mp.launch
-	mp.active.transition(activate)
-}
-
-// toggleOptions shows or hides the options screen.
-func (mp *bampf) toggleOptions(in *vu.Input, down int) {
-	if down == 1 {
-		if mp.active == mp.options {
-			mp.active.transition(deactivate)
-			mp.active = mp.prior
-			mp.active.transition(activate)
-		} else {
-			mp.active.transition(pause)
-			mp.prior = mp.active
-			mp.active = mp.options
-			mp.active.transition(activate)
-		}
-	}
-}
-
-// gameStarted returns true if there is or was a game in progress.
-func (mp *bampf) gameStarted() bool {
-	return mp.prior == mp.game || mp.active == mp.game ||
-		mp.prior == mp.end || mp.active == mp.end
+	mp.active.activate(screenActive)
 }
 
 // stopGame transitions to the launching screen.
 func (mp *bampf) stopGame(in *vu.Input, down int) { mp.state(chooseGame) }
 
 // skipAnimation is used to short circuit the initial level transition.
-func (mp *bampf) skipAnimation(in *vu.Input, down int) {
-	if down == 1 {
-		mp.ani.skip()
-	}
+func (mp *bampf) skipAnimation() {
+	mp.ani.skip()
 }
 
 // resize adjusts all the screens to the current game window size.
@@ -243,7 +265,7 @@ func (mp *bampf) resize() {
 	mp.launch.resize(w, h)
 	mp.game.resize(w, h)
 	mp.end.resize(w, h)
-	mp.options.resize(w, h)
+	mp.config.resize(w, h)
 	mp.setWindow(x, y, w, h)
 }
 
@@ -266,6 +288,7 @@ func (mp *bampf) prefs() (x, y, w, h int, mute bool) {
 	if saver.H > 0 {
 		h = saver.H
 	}
+	mp.keys = append(mp.keys, saver.Kbinds...)
 	return
 }
 
@@ -291,23 +314,47 @@ func (mp *bampf) setMute(mute bool) {
 // screen is used to coordinate which "screen" is currently active. There is
 // only ever one active screen receiving user input.
 type screen interface {
-	fadeIn() animation              // A screen can provide an opening animation.
-	fadeOut() animation             // A screen can provide a closing animation.
-	resize(width, height int)       // Resize the screen.
-	transition(stateTransition int) // Move the screen to a new state.
-	update(in *vu.Input)            // Process user input and run any screen specific animations.
+	resize(width, height int) // Resize the screen.
+	fadeIn() animation        // A screen can provide an opening animation.
+	fadeOut() animation       // A screen can provide a closing animation.
+	activate(state int)       // Move the screen to a new state.
+
+	// Turns user input into game events. Calling it on a screen implies the
+	// screen is the active, so inactive screens become active when called.
+	processInput(in *vu.Input, eventq *list.List) // User input to game events.
+
+	// Handle the list of game events. The list should be cleared, or the
+	// screen should be returning a transition to another screen that will
+	// process the events.
+	processEvents(eventq *list.List) (transition int) // Process game events.
 }
 
-// Screen states and state transitions.
+// screen states.
 const (
-	deactivate = iota // Transition to the deactive state.
-	activate          // Transition to the active state.
-	pause             // Transition to the paused state.
-	evolve            // Transition to the evolving state.
-	query             // Query existing state.
+	screenActive   = iota //
+	screenDeactive        //
+	screenEvolving        //
+	screenPaused          // Screen is visible behind config screen.
 )
 
 // screen
+// ===========================================================================
+// utilities
+
+// logf does nothing by default so that log messages are discarded
+// during production builds.
+var logf = func(format string, v ...interface{}) {}
+
+// setLogger turns logging on in debug loads.
+func (b *bampf) setLogger(gi interface{}) {
+	if fn, ok := gi.(interface {
+		logger(string, ...interface{})
+	}); ok {
+		logf = fn.logger
+	}
+}
+
+// utilities
 // ===========================================================================
 // area
 
@@ -327,6 +374,48 @@ func (a *area) center() (cx, cy float64) {
 }
 
 // area
+// ===========================================================================
+// game events
+
+// Game events.
+const (
+	_             = iota // start at 1.
+	goForward            // Move the player forward.
+	goBack               // Move the player back.
+	goLeft               // Move the player left.
+	goRight              // Move the player right.
+	cloak                // Toggle cloaking.
+	teleport             // Trigger teleport.
+	skipAnim             // Skip any playing animation.
+	rollCredits          // Toggle the game developer list.
+	toggleMute           // Toggle sound.
+	toggleOptions        // Toggle the config screen.
+	pickLevel            // expects int data.
+	rebindKey            // expects rebindKeyEvent data.
+	keysRebound          // expects []string data.
+	startGame            // Transition to the game level.
+	wonGame              // Transition to the end screen.
+	quitLevel            // Transition to the launch screen.
+)
+
+// event is the standard structure for all game events.
+type event struct {
+	id   int         // unique event id.
+	data interface{} // nil, value, or struct; depends on the event.
+}
+
+// rebindKeyEvent is the data for rebindKey events.
+type rebindKeyEvent struct {
+	index int
+	key   string
+}
+
+// publish adds the event to the end of the game event queue.
+func publish(eventq *list.List, eventId int, eventData interface{}) {
+	eventq.PushBack(&event{id: eventId, data: eventData})
+}
+
+// game events
 // ===========================================================================
 
 // CPU or MEM profiling can be turned on by adding a few lines

@@ -1,10 +1,10 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
 import (
-	"log"
+	"container/list"
 	"vu"
 )
 
@@ -21,33 +21,87 @@ type launch struct {
 	bg2        vu.Part         // Background rotating the other way.
 	buttonSize int             // Width and height of each button.
 	mp         *bampf          // Needed for toggling the option screen.
-	reacts     ReactionSet     // User input handlers for this screen.
-	state      func(int)       // Current screen state.
+	evolving   bool            // True when player is moving between levels.
 }
 
 // launch implements the screen interface.
 func (l *launch) fadeIn() animation        { return nil }
 func (l *launch) fadeOut() animation       { return l.newFadeAnimation() }
 func (l *launch) resize(width, height int) { l.handleResize(width, height) }
-func (l *launch) update(in *vu.Input)      { l.handleUpdate(in) }
-func (l *launch) transition(event int)     { l.state(event) }
+func (l *launch) activate(state int) {
+	switch state {
+	case screenActive:
+		l.anim.scale = 200
+		l.scene.SetVisible(true)
+		l.evolving = false
+	case screenDeactive:
+		l.scene.SetVisible(false)
+		l.evolving = false
+	case screenEvolving:
+		l.evolving = true
+	}
+}
+
+// User input to game events. Implements screen interface.
+func (l *launch) processInput(in *vu.Input, eventq *list.List) {
+	for press, down := range in.Down {
+		switch {
+		case press == "Esc" && down == 1 && !l.evolving:
+			publish(eventq, toggleOptions, nil)
+		case press == "Sp" && down == 1:
+			publish(eventq, skipAnim, nil)
+		case press == "Lm" && down == 1:
+			for _, btn := range l.buttons {
+				if btn.clicked(in.Mx, in.My) {
+					publish(eventq, btn.eventId, btn.eventData)
+				}
+			}
+			if l.anim.clicked(in.Mx, in.My) {
+				publish(eventq, startGame, nil)
+			}
+		}
+	}
+
+	// handle once per game tick processing.
+	l.hover(in)
+	l.rotateBackdrop()
+	l.anim.rotate(in.Gt, in.Dt)
+}
+
+// Process game events. Implements screen interface.
+func (l *launch) processEvents(eventq *list.List) (transition int) {
+	for e := eventq.Front(); e != nil; e = e.Next() {
+		eventq.Remove(e)
+		event := e.Value.(*event)
+		switch event.id {
+		case skipAnim:
+			l.mp.skipAnimation()
+		case toggleOptions:
+			return configGame
+		case pickLevel:
+			if level, ok := event.data.(int); ok {
+				l.mp.launchLevel = level
+				l.anim.showLevel(level)
+			} else {
+				logf("launch.processEvents: did not receive startGame level")
+			}
+		case startGame:
+			return playGame
+		}
+	}
+	return chooseGame
+}
 
 // newLaunchScreen creates the start screen. Measurements are 1 pixel == 1 unit
 // because the launch screen is done as an overlay.
 func newLaunchScreen(mp *bampf) *launch {
 	l := &launch{}
-	l.state = l.deactive
 	l.mp = mp
 	l.eng = mp.eng
 	l.scene = l.eng.AddScene(vu.VO)
 	l.scene.Set2D()
 	l.setSize(l.eng.Size())
 	l.buttonSize = 64
-
-	// the start screen only reacts to mouse clicks.
-	l.reacts = NewReactionSet([]Reaction{
-		{"skip", "Sp", l.mp.skipAnimation},
-	})
 
 	// create the background.
 	l.bg1 = l.scene.AddPart()
@@ -60,17 +114,17 @@ func newLaunchScreen(mp *bampf) *launch {
 	// add the animated start button to the scene.
 	l.anim = newStartAnimation(mp, l.scene.AddPart(), l.w, l.h)
 
-	// create the other buttons. Note that the names, eg. "lvl0", are the icon
-	// image names.
+	// create the other buttons. Note that the names, eg. "lvl0",
+	// are the icon image names.
 	buttonPart := l.scene.AddPart()
 	sz := int(l.buttonSize)
 	l.buttons = []*button{
-		newButton(buttonPart, sz, "lvl0", func(i *vu.Input, down int) { l.startAt(0) }),
-		newButton(buttonPart, sz, "lvl1", func(i *vu.Input, down int) { l.startAt(1) }),
-		newButton(buttonPart, sz, "lvl2", func(i *vu.Input, down int) { l.startAt(2) }),
-		newButton(buttonPart, sz, "lvl3", func(i *vu.Input, down int) { l.startAt(3) }),
-		newButton(buttonPart, sz, "lvl4", func(i *vu.Input, down int) { l.startAt(4) }),
-		newButton(buttonPart, sz, "options", l.mp.toggleOptions),
+		newButton(buttonPart, sz, "lvl0", pickLevel, 0),
+		newButton(buttonPart, sz, "lvl1", pickLevel, 1),
+		newButton(buttonPart, sz, "lvl2", pickLevel, 2),
+		newButton(buttonPart, sz, "lvl3", pickLevel, 3),
+		newButton(buttonPart, sz, "lvl4", pickLevel, 4),
+		newButton(buttonPart, sz, "options", toggleOptions, nil),
 	}
 	for _, btn := range l.buttons {
 		btn.icon.SetScale(1, 1, 0)
@@ -82,78 +136,6 @@ func newLaunchScreen(mp *bampf) *launch {
 	l.mp.ani.addAnimation(l.newButtonAnimation())
 	l.scene.SetVisible(false)
 	return l
-}
-
-// skip the current animation, if any.
-func (l *launch) skipAnimation(in *vu.Input, down int) {
-	if down == 1 {
-		l.mp.ani.skip()
-	}
-}
-
-// deactive state waits for the activate event.
-func (l *launch) deactive(event int) {
-	switch event {
-	case activate:
-		l.anim.scale = 200
-		l.scene.SetVisible(true)
-		l.enableKeys()
-		l.state = l.active
-	default:
-		log.Printf("start: clean state: invalid transition %d", event)
-	}
-}
-
-// active state waits for the evolve, pause, or deactivate events.
-func (l *launch) active(event int) {
-	switch event {
-	case evolve:
-		l.disableKeys()
-		l.state = l.evolving
-	case pause:
-		l.disableKeys()
-		l.state = l.paused
-	case deactivate:
-		l.disableKeys()
-		l.scene.SetVisible(false)
-		l.state = l.deactive
-	default:
-		log.Printf("start: active state: invalid transition %d", event)
-	}
-}
-
-// paused state waits for the activate event.
-func (l *launch) paused(event int) {
-	switch event {
-	case activate:
-		l.enableKeys()
-		l.state = l.active
-	default:
-		log.Printf("start: paused state: invalid transition %d", event)
-	}
-}
-
-// evolving state waits for the deactive event.
-func (l *launch) evolving(event int) {
-	switch event {
-	case deactivate:
-		l.scene.SetVisible(false)
-		l.state = l.deactive
-	default:
-		log.Printf("start: evolving state: invalid transition %d", event)
-	}
-}
-
-// disableKeys disallows certain keys when the screen is not active.
-func (l *launch) disableKeys() {
-	l.reacts.Rem("opts")
-	l.reacts.Rem("click")
-}
-
-// enableKeys reenables previously disabled keys.
-func (l *launch) enableKeys() {
-	l.reacts.Add(Reaction{"opts", "Esc", l.mp.toggleOptions})
-	l.reacts.Add(Reaction{"click", "Lm", func(i *vu.Input, down int) { l.click(i, down) }})
 }
 
 // handleResize adjusts the screen to the current window size.
@@ -175,28 +157,11 @@ func (l *launch) handleResize(width, height int) {
 	l.layout(1)
 }
 
-// startAt allows the user to begin at any difficulty level. It is used as the action
-// for the start screen choose-difficulty buttons.
-func (l *launch) startAt(level int) {
-	l.mp.launchLevel = level
-	l.anim.showLevel(level)
-}
-
 // setSize adjusts the start screen dimensions.
 func (l *launch) setSize(x, y, width, height int) {
 	l.x, l.y, l.w, l.h = 0, 0, width, height
-	l.scene.SetOrthographic(0, float64(l.w), 0, float64(l.h), 0, 10)
+	l.scene.Cam().SetOrthographic(0, float64(l.w), 0, float64(l.h), 0, 10)
 	l.cx, l.cy = l.center()
-}
-
-// handleUpdate runs things that need doing every game loop.
-func (l *launch) handleUpdate(in *vu.Input) {
-	for key, down := range in.Down {
-		l.reacts.Respond(key, in, down)
-	}
-	l.hover(in)
-	l.rotateBackdrop()
-	l.anim.rotate(in.Gt, in.Dt)
 }
 
 // hover hilites any button the mouse is over.
@@ -207,25 +172,10 @@ func (l *launch) hover(i *vu.Input) {
 	}
 }
 
-// click is called when the user presses the left mouse button.
-func (l *launch) click(i *vu.Input, down int) {
-	if down == 1 {
-		mx, my := i.Mx, i.My
-		for _, btn := range l.buttons {
-			if btn.clicked(i, down) {
-				return // small buttons take precedence over the start game button.
-			}
-		}
-		if l.anim.clicked(mx, my) {
-			l.mp.state(playGame)
-		}
-	}
-}
-
 // layout positions the buttons to the lower-middle part of the screen.
 func (l *launch) layout(buttonIndex float64) {
 	if len(l.buttons) != 6 {
-		log.Printf("start.layout: buttons changed without updating layout.")
+		logf("start.layout: buttons changed without updating layout.")
 		return
 	}
 	cy := (l.cy - float64(l.h/2) + float64(2*l.buttonSize))
@@ -269,13 +219,18 @@ type fadeStartAnimation struct {
 func (f *fadeStartAnimation) Animate(dt float64) bool {
 	switch f.state {
 	case 0:
-		f.l.state(evolve)
+		for _, btn := range f.l.buttons {
+			btn.setVisible(false)
+		}
+		f.l.activate(screenEvolving)
 		f.l.anim.hilite.Role().SetAlpha(0.0)
 		f.state = 1
 		return true
 	case 1:
 		f.l.anim.scale -= 200 / float64(f.ticks)
-		f.l.bg1.Role().SetAlpha(f.l.bg1.Role().Alpha() - float64(1)/float64(f.ticks))
+		alpha := f.l.bg1.Role().Alpha() - float64(0.5)/float64(f.ticks)
+		f.l.bg1.Role().SetAlpha(alpha)
+		f.l.bg2.Role().SetAlpha(alpha)
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -293,8 +248,12 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 func (f *fadeStartAnimation) Wrap() {
 	f.l.anim.hilite.Role().SetAlpha(0.3)
 	f.l.bg1.Role().SetAlpha(0.5)
+	f.l.bg2.Role().SetAlpha(0.5)
 	f.state = 2
-	f.l.state(deactivate)
+	f.l.activate(screenDeactive)
+	for _, btn := range f.l.buttons {
+		btn.setVisible(true)
+	}
 }
 
 // fadeStartAnimation

@@ -1,12 +1,11 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
 // Energy core related code is grouped here.
 
 import (
-	"log"
 	"math/rand"
 	"time"
 	"vu"
@@ -22,11 +21,13 @@ type coreControl struct {
 	holdoff time.Duration // time delay between core drops.
 	units   float64       // eng.Units injected on creation is...
 	spot    *gridSpot     // ...used to translate between grid and game coordinates.
+	ani     *animator     // Handles short animations.
 }
 
 // newCoreControl returns an initialized coreControl structure.
-func newCoreControl(units int) *coreControl {
+func newCoreControl(units int, ani *animator) *coreControl {
 	cc := &coreControl{}
+	cc.ani = ani
 	cc.units = float64(units)
 	cc.cores = []vu.Part{}
 	cc.saved = []gridSpot{}
@@ -55,8 +56,7 @@ func (cc *coreControl) canDrop(coresNeeded int) bool {
 // dropSpot picks a random free core drop location. Return the potential
 // gridx, gridy drop location
 func (cc *coreControl) dropSpot() (gridx, gridy int) {
-	random := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-	index := random.Intn(len(cc.tiles))
+	index := rand.Intn(len(cc.tiles))
 	spot := cc.tiles[index]
 	return spot.x, spot.y
 }
@@ -75,16 +75,17 @@ func (cc *coreControl) dropCore(sc vu.Scene, fade float64, gridx, gridy int) (ga
 		}
 	}
 	if !removed {
-		log.Printf("core.dropCore: failed to locate what should be a valid drop location")
-		return
+		logf("core.dropCore: failed to locate what should be a valid drop location")
+		return 0, 0
 	}
 	core := cc.createCore(sc, fade)
 
 	// add the core to the list of dropped cores.
 	cc.cores = append(cc.cores, core)
-	gamex, gamez = cc.spot.toGame(gridx, gridy, cc.units)
-	core.SetLocation(gamex, 10, gamez)
-	return
+	gamex, gamez = toGame(gridx, gridy, cc.units)
+	core.SetLocation(gamex, 10, gamez) // start high and animate drop to floor level.
+	cc.ani.addAnimation(&coreDropAnimation{core: core})
+	return gamex, gamez
 }
 
 // remCore destroys the indicated core. The drop spot is now available for new
@@ -97,10 +98,10 @@ func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float64) {
 	core.Dispose()
 	sc.RemPart(core)
 	gamex, _, gamez = core.Location()
-	x, y := cc.spot.toGrid(gamex, 0, gamez, cc.units)
+	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 
 	// make the tile available for a new drop. Use the old core location.
-	cc.tiles = append(cc.tiles, gridSpot{x, y})
+	cc.tiles = append(cc.tiles, gridSpot{gridx, gridy})
 	return gamex, gamez
 }
 
@@ -108,10 +109,10 @@ func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float64) {
 // as a core. Return -1 if no core was hit.
 func (cc *coreControl) hitCore(gamex, gamez float64) (coreIndex int) {
 	coreIndex = -1
-	gridx, gridy := cc.playerToGrid(gamex, 0, gamez)
+	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 	for index, core := range cc.cores {
 		x, y, z := core.Location()
-		corex, corey := cc.spot.toGrid(x, y, z, cc.units)
+		corex, corey := toGrid(x, y, z, cc.units)
 		if gridx == corex && gridy == corey {
 			coreIndex = index
 			break
@@ -145,7 +146,6 @@ func (cc *coreControl) reset(sc vu.Scene) {
 // createCore makes the new core model.
 func (cc *coreControl) createCore(sc vu.Scene, fade float64) vu.Part {
 	core := sc.AddPart()
-	core.SetBody(vu.Sphere(0.15), 1, 0.8)
 
 	// combine billboards to get an effect with some movement.
 	cimg := core.AddPart().SetScale(0.25, 0.25, 0.25)
@@ -185,11 +185,25 @@ func (cc *coreControl) createCore(sc vu.Scene, fade float64) vu.Part {
 	return core
 }
 
-// playerToGrid maps to rectangular areas around grid centers.  This is needed to
-// interpret a player game location as an integer grid location.
-func (cc *coreControl) playerToGrid(gamex, gamey, gamez float64) (gridx, gridy int) {
-	inv := float64(1) / float64(cc.units)
-	adj := float64(cc.units) * 0.5
+// coreControl
+// ===========================================================================
+// gridSpot is used by coreControl and sentinel.
+
+// gridSpot is used to track grid locations. It can be used to store grid
+// locations and to convert back and forth between grid and game locations.
+type gridSpot struct{ x, y int }
+
+// toGame takes a grid location and translates into a game location.
+// Game locations are where models of cores, walls, and tiles are placed.
+func toGame(gridx, gridy int, units float64) (gamex, gamez float64) {
+	return float64(gridx) * units, float64(-gridy) * units
+}
+
+// toGrid takes the current game location and translates into a grid location.
+// Grid locations are where cores are dropped or fetched.
+func toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
+	inv := 1.0 / units
+	adj := units * 0.5
 	xadj := adj
 	if gamex < 0 {
 		xadj = -xadj
@@ -201,22 +215,46 @@ func (cc *coreControl) playerToGrid(gamex, gamey, gamez float64) (gridx, gridy i
 	return int((gamex + xadj) * inv), int((-gamez + yadj) * inv)
 }
 
-// coreControl
 // ===========================================================================
-// gridSpot is used by coreControl and sentinel.
+// coreDropAnimation
 
-// gridSpot is used to track grid locations. It can be used to store grid
-// locations and to convert back and forth between grid and game locations.
-type gridSpot struct{ x, y int }
-
-// toGame takes a grid location and translates into a game location.
-// Game locations are where models of cores, walls, and tiles are placed.
-func (gs *gridSpot) toGame(gridx, gridy int, units float64) (gamex, gamez float64) {
-	return float64(gridx) * units, float64(-gridy) * units
+// coreDropAnimation shows cores falling when they are first created.
+type coreDropAnimation struct {
+	core    vu.Part // core to animate.
+	x, y, z float64 // core location.
+	drop    float64 // the amount to fall each tick.
+	rest    float64 // final resting location.
+	ticks   int     // how many game ticks to animate.
+	state   int
 }
 
-// toGrid takes the current game location and translates into a grid location.
-// Grid locations are where cores are dropped or fetched.
-func (gs *gridSpot) toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
-	return int(gamex / float64(units)), int(-gamez / float64(units))
+// Animate implements animation. Drop the core.
+func (ca *coreDropAnimation) Animate(dt float64) bool {
+	switch ca.state {
+	case 0:
+		ca.ticks = 50                         // total animation time.
+		ca.rest = 0.25                        // final core height.
+		ca.x, ca.y, ca.z = ca.core.Location() // initial location.
+		ca.drop = (ca.rest - ca.y) / float64(ca.ticks)
+		ca.state = 1
+		return true
+	case 1:
+		if ca.ticks > 0 {
+			ca.y += ca.drop
+			ca.core.SetLocation(ca.x, ca.y, ca.z)
+			ca.ticks--
+			return true // animation not done.
+		}
+		ca.Wrap()
+		return false // animation done.
+	default:
+		return false // animation done.
+	}
+}
+
+// Wrap finishes the core drop by ensuring the core is at its
+// final location.
+func (ca *coreDropAnimation) Wrap() {
+	ca.core.SetLocation(ca.x, ca.rest, ca.z)
+	ca.state = 2
 }

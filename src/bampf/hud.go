@@ -1,10 +1,9 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
 import (
-	"log"
 	"strconv"
 	"vu"
 	"vu/math/lin"
@@ -12,14 +11,15 @@ import (
 
 // hud is the 2D controller for all parts of the games heads-up-display (HUD).
 type hud struct {
-	area           // Hud fills up the full screen.
-	scene vu.Scene // Scene graph plus camera and lighting.
-	pl    *player  // Player model.
-	xp    *xpbar   // Show cores collected and current energy.
-	mm    *minimap // Show overhead map centered on player.
-	ce    vu.Part  // Cloaking effect.
-	te    vu.Part  // Teleport effect.
-	ee    vu.Part  // Energy loss effect.
+	area            // Hud fills up the full screen.
+	scene vu.Scene  // Scene graph plus camera and lighting.
+	cam   vu.Camera // Quick access to the scene camera.
+	pl    *player   // Player model.
+	xp    *xpbar    // Show cores collected and current energy.
+	mm    *minimap  // Show overhead map centered on player.
+	ce    vu.Part   // Cloaking effect.
+	te    vu.Part   // Teleport effect.
+	ee    vu.Part   // Energy loss effect.
 }
 
 // newHud creates all the various parts of the heads up display.
@@ -27,6 +27,7 @@ func newHud(eng vu.Engine, sentryCount int) *hud {
 	hd := &hud{}
 	hd.scene = eng.AddScene(vu.VO)
 	hd.scene.Set2D()
+	hd.cam = hd.scene.Cam()
 	hd.setSize(eng.Size())
 
 	// create the HUD parts.
@@ -43,7 +44,7 @@ func newHud(eng vu.Engine, sentryCount int) *hud {
 // setSize adjusts the size of the hud to the current screen dimensions.
 func (hd *hud) setSize(screenX, screenY, screenWidth, screenHeight int) {
 	hd.x, hd.y, hd.w, hd.h = 0, 0, screenWidth, screenHeight
-	hd.scene.SetOrthographic(0, float64(hd.w), 0, float64(hd.h), 0, 10)
+	hd.cam.SetOrthographic(0, float64(hd.w), 0, float64(hd.h), 0, 10)
 	hd.cx, hd.cy = hd.center()
 }
 
@@ -62,8 +63,8 @@ func (hd *hud) resize(screenWidth, screenHeight int) {
 	hd.ee.SetLocation(hd.cx, hd.cy, -1)
 }
 
-// setVisible turns the HUD on/off. This is used when transitioning between
-// levels.
+// setVisible turns the HUD on/off. This is used when transitioning
+// between levels.
 func (hd *hud) setVisible(isVisible bool) {
 	hd.scene.SetVisible(isVisible)
 	hd.mm.setVisible(isVisible)
@@ -136,7 +137,8 @@ type player struct {
 func newPlayer(eng vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *player {
 	pl := &player{}
 	pl.cx, pl.cy = 100, 100
-	pl.bg = scene.AddPart().SetLocation(pl.cx, pl.cy, 0).SetScale(110, 110, 1)
+	pl.bg = scene.AddPart().SetScale(110, 110, 1)
+	pl.bg.SetLocation(pl.cx, pl.cy, 0)
 	pl.bg.SetRole("uvm").SetMesh("icon").AddTex("hudbg").SetMaterial("green")
 	return pl
 }
@@ -318,7 +320,8 @@ func (xp *xpbar) updateKeys(teleportKey, cloakKey string) {
 type minimap struct {
 	area             // Rectangular area.
 	scene  vu.Scene  // Xztoxy scene.
-	eng    vu.Engine // Engine.
+	cam    vu.Camera // Quick access to the scene camera.
+	eng    vu.Engine // Engine for creating a scene and parts.
 	cores  []vu.Part // Keep track of the cores for removal.
 	part   vu.Part   // Used to transform all the minimap models.
 	bg     vu.Part   // The white background.
@@ -334,11 +337,12 @@ func newMinimap(eng vu.Engine, numTroops int) *minimap {
 	mm := &minimap{}
 	mm.eng = eng
 	mm.radius = 120
-	mm.scale = float64(5)
+	mm.scale = 5.0
 	mm.cores = []vu.Part{}
 	mm.scene = eng.AddScene(vu.XZ_XY)
 	mm.scene.SetCuller(vu.NewRadiusCuller(float64(mm.radius)))
 	mm.scene.Set2D()
+	mm.cam = mm.scene.Cam()
 	mm.setSize(eng.Size())
 
 	// create the parent for all the visible minimap pieces.
@@ -382,34 +386,36 @@ func (mm *minimap) resize(width, height int) {
 // Generally this is 1 pixel to 1 unit for HUD type scenes.
 func (mm *minimap) setSize(x, y, width, height int) {
 	mm.x, mm.y, mm.w, mm.h = width-mm.radius-10, 125, width, height
-	mm.scene.SetOrthographic(0, float64(mm.w), 0, float64(mm.h), 0, 10)
+	mm.cam.SetOrthographic(0, float64(mm.w), 0, float64(mm.h), 0, 10)
 }
 
 // setLevel is called when a level transition happens.
 func (mm *minimap) setLevel(sc vu.Scene, lvl *level) {
-	x, y, z := sc.Location()
-	mm.scene.SetLocation(x*mm.scale, y*mm.scale, z*mm.scale)
+	x, y, z := sc.Cam().Location()
+	mm.cam.SetLocation(x*mm.scale, y*mm.scale, z*mm.scale)
 
 	// adjust the center location based on the game maze center.
 	mm.cx, mm.cy = float64(lvl.gcx*lvl.units)*mm.scale, float64(-lvl.gcy*lvl.units)*mm.scale
 	mm.ppm.SetLocation(x, y, z)
 	mm.bg.SetLocation(x, y, z)
-	mm.ppm.SetRotation(sc.Rotation())
+	mm.ppm.SetRotation(sc.Cam().Rotation())
 	mm.setSentryLocations(lvl.sentries)
 	lvl.player.monitorHealth("mmap", mm)
 }
 
 // addWall adds a block representing a wall to the minimap.
 func (mm *minimap) addWall(x, y float64) {
-	wall := mm.part.AddPart().SetLocation(x*mm.scale, 0, y*mm.scale)
+	wall := mm.part.AddPart()
+	wall.SetLocation(x*mm.scale, 0, y*mm.scale)
 	wall.SetScale(mm.scale, mm.scale, mm.scale)
 	wall.SetRole("flat").SetMesh("square_xz").SetMaterial("gray")
 }
 
 // addCore adds a small block representing an energy core to the minimap.
-func (mm *minimap) addCore(x, y float64) {
+func (mm *minimap) addCore(gamex, gamey float64) {
 	scale := mm.scale
-	cm := mm.part.AddPart().SetLocation(x*scale, 0, y*scale)
+	cm := mm.part.AddPart()
+	cm.SetLocation(gamex*scale, 0, gamey*scale)
 	scale *= 0.5
 	cm.SetScale(scale, scale, scale)
 	cm.SetRole("flat").SetMesh("square_xz").SetMaterial("green")
@@ -429,11 +435,11 @@ func (mm *minimap) remCore(gamex, gamez float64) {
 			return
 		}
 	}
-	log.Printf("hud.mapOverlay.remCore: failed to remove a core.")
+	logf("hud.mapOverlay.remCore: failed to remove a core.")
 }
 
-// resetCores is expected to be called when switching levels so that this level
-// is clear of cores the next time it is activated.
+// resetCores is expected to be called when switching levels so that
+// this level is clear of cores the next time it is activated.
 func (mm *minimap) resetCores() {
 	for _, core := range mm.cores {
 		mm.part.RemPart(core)
@@ -454,11 +460,11 @@ func (mm *minimap) healthUpdated(health, warn, high int) {
 // update adjusts the minimap according to the players new position.
 func (mm *minimap) update(sc vu.Scene, sentries []*sentinel) {
 	scale := mm.scale
-	x, y, z := sc.Location()
+	x, y, z := sc.Cam().Location()
 	x, y, z = x*scale, y*scale, z*scale
-	mm.scene.SetLocation(x, y, z)
+	mm.cam.SetLocation(x, y, z)
 	mm.setPlayerLocation(x, y, z)
-	mm.setPlayerRotation(sc.Rotation())
+	mm.setPlayerRotation(sc.Cam().Rotation())
 	mm.setCenterLocation(x, y, z)
 	mm.setSentryLocations(sentries)
 }
@@ -491,6 +497,6 @@ func (mm *minimap) setSentryLocations(sentinels []*sentinel) {
 			tpm.SetLocation(x, y, z)
 		}
 	} else {
-		log.Printf("hud.minimap.setSentryLocations: sentry length mismatch")
+		logf("hud.minimap.setSentryLocations: sentry length mismatch")
 	}
 }

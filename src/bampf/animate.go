@@ -1,5 +1,5 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
@@ -45,8 +45,8 @@ func (a *animator) addAnimation(ani animation) {
 	ani.Animate(0)
 }
 
-// animate runs each of the active animations one step. It is expected to be
-// called each update loop.
+// animate runs each of the active animations one step.
+// It is expected to be called each update loop.
 func (a *animator) animate(deltaTime float64) {
 	active := []animation{}
 	startA := len(a.animations)
@@ -56,15 +56,15 @@ func (a *animator) animate(deltaTime float64) {
 		}
 	}
 
-	// Only reset the list if animations have not been added during
-	// the Animate() callbacks.
+	// Only reset the list if animations have not been
+	// added during the Animate() callbacks.
 	if startA == len(a.animations) {
 		a.animations = active
 	}
 }
 
-// skip wraps up any current animations and discards the list of active
-// animations.
+// skip wraps up any current animations and discards
+// the list of active animations.
 func (a *animator) skip() {
 	for _, animation := range a.animations {
 		animation.Wrap()
@@ -80,10 +80,10 @@ func (a *animator) skip() {
 // used for transitioning between two screens. It is a composite animation
 // that acts like a single Animation.
 type transitionAnimation struct {
-	firstA  animation // First animation.
-	transit func()    // The function to run between the animations.
-	lastA   animation // Second animation.
-	state   int       // Track which animation is running.
+	firstA animation // First animation.
+	mid    func()    // The function to run between the animations.
+	lastA  animation // Second animation.
+	state  int       // Track which animation is running.
 }
 
 // state constants for transitionAnimation
@@ -94,8 +94,8 @@ const (
 
 // newTransitionAnimation creates a composite animation using two animations
 // and an action that is run between the two animations.
-func newTransitionAnimation(firstA, lastA animation, action func()) animation {
-	return &transitionAnimation{firstA, action, lastA, runFirst}
+func newTransitionAnimation(firstA, lastA animation, mid func()) animation {
+	return &transitionAnimation{firstA, mid, lastA, runFirst}
 }
 
 // Animate runs the animations and the transition action in sequence.
@@ -103,8 +103,8 @@ func (ta *transitionAnimation) Animate(dt float64) bool {
 	switch ta.state {
 	case runFirst:
 		if ta.firstA == nil || !ta.firstA.Animate(dt) {
-			if ta.transit != nil {
-				ta.transit()
+			if ta.mid != nil {
+				ta.mid()
 			}
 			ta.state = runLast
 		}
@@ -124,8 +124,8 @@ func (ta *transitionAnimation) Wrap() {
 		if ta.firstA != nil {
 			ta.firstA.Wrap()
 		}
-		if ta.transit != nil {
-			ta.transit()
+		if ta.mid != nil {
+			ta.mid()
 		}
 		ta.state = runLast
 	}

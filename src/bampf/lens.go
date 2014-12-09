@@ -1,9 +1,10 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
 import (
+	"math"
 	"vu"
 )
 
@@ -38,7 +39,7 @@ func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float64) {
 		case xdiff < -10:
 			xdiff = -10
 		}
-		sc.Spin(vu.YAxis, dt*float64(-xdiff)*spin)
+		sc.Cam().Spin(0, dt*float64(-xdiff)*spin, 0)
 	}
 	if ydiff != 0 {
 		switch { // cap movement amount.
@@ -51,8 +52,9 @@ func (f *fps) look(sc vu.Scene, spin, dt, xdiff, ydiff float64) {
 	}
 }
 
+// lookUpDown limits the vertical camera movement to plus/minus 90 degrees.
 func (f *fps) lookUpDown(sc vu.Scene, ydiff, spin, dt float64) {
-	height := sc.Tilt()
+	height := sc.Cam().Tilt()
 	height += dt * -ydiff * spin
 	if height > 90.0 {
 		height = 90.0
@@ -60,7 +62,7 @@ func (f *fps) lookUpDown(sc vu.Scene, ydiff, spin, dt float64) {
 	if height < -90.0 {
 		height = -90.0
 	}
-	sc.SetTilt(height)
+	sc.Cam().SetTilt(height)
 }
 
 // implement the rest of the lens interface.
@@ -72,20 +74,25 @@ func (f *fps) up(bod vu.Part, dt, run float64)      {} // only works in debug
 func (f *fps) down(bod vu.Part, dt, run float64)    {} // only works in debug
 
 // Handle movement assuming there is a physics body associated with the camera.
-// This attempts to smooth out movement by adding a higher initial velocity push.
+// This attempts to smooth out movement by adding a higher initial velocity push
+// and then capping movement once max accelleration is reached.
 func (f *fps) move(bod vu.Part, x, y, z float64) {
-	sx, _, sz := bod.Speed()
+	boost := 40.0    // kick into high gear from stop.
+	maxAccel := 10.0 // limit accelleration.
+	sx, _, sz := bod.Body().Speed()
 	if x != 0 {
-		if sx == 0 {
-			bod.Move(x*40, 0, 0)
-		} else {
+		switch {
+		case sx == 0.0:
+			bod.Move(x*boost, 0, 0)
+		case math.Abs(sx) < maxAccel && math.Abs(sz) < maxAccel:
 			bod.Move(x, 0, 0)
 		}
 	}
 	if z != 0 {
-		if sz == 0 {
-			bod.Move(0, 0, z*40)
-		} else {
+		switch {
+		case sz == 0.0:
+			bod.Move(0, 0, z*boost)
+		case math.Abs(sx) < maxAccel && math.Abs(sz) < maxAccel:
 			bod.Move(0, 0, z)
 		}
 	}

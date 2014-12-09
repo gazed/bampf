@@ -1,21 +1,19 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
 import (
-	"log"
 	"sort"
 	"vu"
-	"vu/audio"
 	"vu/math/lin"
 )
 
 // trooper is a cube that represents the players health and
 // progress for a level. Each new level increases the size of the cube.
-// Trooper is an attempt to keep polygon growth linear while the player statistics
-// grows exponentially. This is done by rendering groups of cells as a single
-// cube when possible.
+// Trooper is an attempt to keep polygon growth linear while the player
+// statistics grows exponentially. This is done by rendering groups of
+// cells as a single cube when possible.
 //
 // trooper works with single cubes (cells) of size 2 centered at the origin.
 type trooper struct {
@@ -32,9 +30,8 @@ type trooper struct {
 	teleportEnergy, temax int       // Energy available for teleporting.
 
 	// monitors and sounds.
-	hms    map[string]healthMonitor    // Health event monitors.
-	ems    map[string]energyMonitor    // Energy event monitors.
-	noises map[string]audio.SoundMaker // Various sounds.
+	hms map[string]healthMonitor // Health event monitors.
+	ems map[string]energyMonitor // Energy event monitors.
 }
 
 // newTrooper creates a trooper for the given level.
@@ -51,7 +48,6 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 	tr.bits = []box{}
 	tr.ipos = []int{}
 	tr.mid = tr.lvl*tr.lvl*tr.lvl*8 - (tr.lvl-1)*(tr.lvl-1)*(tr.lvl-1)*8
-	tr.noises = make(map[string]audio.SoundMaker)
 
 	// set max energies.
 	tr.cemax, tr.temax = 1000, 1000
@@ -135,6 +131,11 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 	return tr
 }
 
+// play the indicated sound.
+func (tr *trooper) play(sound string) {
+	tr.part.Sound(sound).Play()
+}
+
 // fullHealth returns true if the player is at full health.
 func (tr *trooper) fullHealth() bool { return tr.neo != nil }
 
@@ -198,8 +199,7 @@ func (tr *trooper) attach() {
 // Otherwise remove from a panel.
 func (tr *trooper) detach() {
 	if tr.neo != nil {
-		tr.demerge()
-		tr.healthChanged(tr.health())
+		tr.demerge() // will re-enter detach.
 		return
 	}
 	for _, b := range tr.bits {
@@ -220,17 +220,8 @@ func (tr *trooper) detachCores(loss int) {
 		loss = h
 	}
 	for cnt := loss; cnt > 0; cnt-- {
-		if tr.neo != nil {
-			tr.demerge()
-			continue
-		}
-		for _, b := range tr.bits {
-			if b.detach() {
-				break
-			}
-		}
+		tr.detach()
 	}
-	tr.healthChanged(tr.health())
 }
 
 // merge collapses all the troopers cubes into a single cube with an
@@ -251,7 +242,7 @@ func (tr *trooper) demerge() {
 	for _, b := range tr.bits {
 		b.reset(b.box().cmax)
 	}
-	tr.bits[0].detach()
+	tr.detach()
 }
 
 // trash destroys all the troopers cells.
@@ -282,15 +273,11 @@ func (tr *trooper) cloak(useCloak bool) {
 	if useCloak && tr.cloakEnergy > 0 {
 		tr.cloaked = true
 		tr.eng.PlaceSoundListener(tr.loc())
-		noise := tr.noises["cloak"]
-		noise.SetLocation(tr.loc())
-		noise.Play()
+		tr.play("cloak")
 	} else if !useCloak {
 		tr.cloaked = false
 		tr.eng.PlaceSoundListener(tr.loc())
-		noise := tr.noises["decloak"]
-		noise.SetLocation(tr.loc())
-		noise.Play()
+		tr.play("decloak")
 	}
 }
 
@@ -299,9 +286,7 @@ func (tr *trooper) cloak(useCloak bool) {
 func (tr *trooper) teleport() bool {
 	if tr.teleportEnergy >= tr.temax {
 		tr.eng.PlaceSoundListener(tr.loc())
-		teleportNoise := tr.noises["teleport"]
-		teleportNoise.SetLocation(tr.loc())
-		teleportNoise.Play()
+		tr.play("teleport")
 		tr.teleportEnergy = 0
 		tr.energyChanged()
 		return true
@@ -479,7 +464,7 @@ func (p *panel) addCell() {
 			}
 		}
 	}
-	log.Printf("pc:panel addCell should never reach here. %d %d", p.ccnt, p.cmax)
+	logf("pc:panel addCell should never reach here. %d %d", p.ccnt, p.cmax)
 }
 
 // removeCell takes a piece out of a panel.
@@ -489,14 +474,15 @@ func (p *panel) removeCell() {
 			return
 		}
 	}
-	log.Printf("pc:panel removeCell should never reach here.")
+	logf("pc:panel removeCell should never reach here.")
 }
 
 // merge turns all the cubes into a single panel.
 func (p *panel) merge() {
 	p.trash()
 	size := p.csize * 0.5
-	p.slab = p.part.AddPart().SetLocation(p.cx, p.cy, p.cz)
+	p.slab = p.part.AddPart()
+	p.slab.SetLocation(p.cx, p.cy, p.cz)
 	scale := float64(p.lvl-1) * size
 	if (p.cx > p.cy && p.cx > p.cz) || (p.cx < p.cy && p.cx < p.cz) {
 		p.slab.SetScale(size, scale, scale)
@@ -583,7 +569,8 @@ func (c *cube) panelSort(rx, ry, rz float64, startCount int) {
 // addCell creates and adds a new cell to the cube.
 func (c *cube) addCell() {
 	center := c.centers[c.ccnt-1]
-	cell := c.part.AddPart().SetLocation(center.X, center.Y, center.Z)
+	cell := c.part.AddPart()
+	cell.SetLocation(center.X, center.Y, center.Z)
 	scale := c.csize * 0.20 // leave a gap (0.25 for no gap).
 	cell.SetScale(scale, scale, scale)
 	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
@@ -604,7 +591,8 @@ func (c *cube) removeCell() {
 // merge is called.
 func (c *cube) merge() {
 	c.trash()
-	cell := c.part.AddPart().SetLocation(c.cx, c.cy, c.cz)
+	cell := c.part.AddPart()
+	cell.SetLocation(c.cx, c.cy, c.cz)
 	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
 	cell.Role().SetUniform("fd", 1000)
 	scale := (c.csize - (c.csize * 0.15)) * 0.5 // leave a gap (just c.csize for no gap)
@@ -637,8 +625,8 @@ func (c csort) Less(i, j int) bool     { return c.Dtoc(c[i]) < c.Dtoc(c[j]) }
 func (c csort) Dtoc(v *lin.V3) float64 { return v.X*v.X + v.Y*v.Y + v.Z*v.Z }
 
 // ssort is used to sort the panel cube quadrants so that the quadrants
-// to the inside origin plane are first in the list. A reference normal is
-// necessary since the panels get large enough that the points on the
+// to the inside origin plane are first in the list. A reference normal
+// is necessary since the panels get large enough that the points on the
 // "outside" get picked up due to the angle.
 type ssort struct {
 	c       []*lin.V3 // list of quadrant centers.
@@ -695,8 +683,9 @@ func (tr *trooper) healthChanged(health, mid, max int) {
 // energyMontior
 
 // energyMonitor is used to monitor the troopers energy amount changes.
+// Called when cells are added or lost.
 type energyMonitor interface {
-	energyUpdated(teleportEnergy, tmax, cloakEnergy, cmax int) // called when cells are added or lost.
+	energyUpdated(teleportEnergy, tmax, cloakEnergy, cmax int)
 }
 
 // monitorEnergy adds a monitor for trooper energy changes.

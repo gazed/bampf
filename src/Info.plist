@@ -19,15 +19,15 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleVersion</key>
-	<string>1.0</string>
+	<string>1.2</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.2</string>
 	<key>CFBundleSignature</key>
 	<string>BAMP</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.arcade-games</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.7</string>
+	<string>10.10</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2013, Galvanized Logic Inc.</string>
 </dict>

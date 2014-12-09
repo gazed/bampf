@@ -1,5 +1,5 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
@@ -7,28 +7,28 @@ import (
 	"bytes"
 	"encoding/gob"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 )
 
-// Saver persists any game state that needs to be remembered between one game
-// session and the next. Saver needs to be public and visible for the encoding package.
+// Saver persists any game state that needs to be remembered between one
+// game session and the next. Saver needs to be public and visible for
+// the encoding package.
 type Saver struct {
-	File       string            // Save file name.
-	Kmap       map[string]string // Key bindings.
-	X, Y, W, H int               // Window location.
-	Mute       bool              // True if the game is muted.
+	File       string   // Save file name.
+	Kbinds     []string // Key bindings.
+	X, Y, W, H int      // Window location.
+	Mute       bool     // True if the game is muted.
 }
 
-// newSaver creates default persistent application state. The directory is
-// platform specific and specified by:
+// newSaver creates default persistent application state. The directory
+// is platform specific and specified by:
 //    osx  : see saver_darwin.go
 //    win  : see saver_windows.go
 //    lin  : FUTURE
 func newSaver() *Saver {
 	s := &Saver{}
-	s.Kmap = map[string]string{}
+	s.Kbinds = []string{}
 	dir := s.directoryLocation()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		dir = ""
@@ -37,10 +37,11 @@ func newSaver() *Saver {
 	return s
 }
 
-// persistBindings saves the new keybindings, while preserving the other information.
-func (s *Saver) persistBindings(keymap map[string]string) {
+// persistBindings saves the new keybindings, while preserving the other
+// information.
+func (s *Saver) persistBindings(keys []string) {
 	s.restore()
-	s.Kmap = keymap
+	s.Kbinds = keys
 	s.persist()
 }
 
@@ -67,24 +68,23 @@ func (s *Saver) persist() {
 	enc := gob.NewEncoder(data) // saves
 	if err := enc.Encode(s); err == nil {
 		if err = ioutil.WriteFile(s.File, data.Bytes(), 0644); err != nil {
-			log.Printf("Failed to save game state: %s", err)
+			logf("Failed to save game state: %s", err)
 		}
 	} else {
-		log.Printf("Failed to encode game state: %s", err)
+		logf("Failed to encode game state: %s", err)
 	}
 }
 
 // restore reads persisted information from disk. It handles the case where
 // a previous restore file doesn't exist.
-func (s *Saver) restore() *Saver {
+func (s *Saver) restore() {
 	if bites, err := ioutil.ReadFile(s.File); err == nil {
 		data := bytes.NewBuffer(bites)
 		dec := gob.NewDecoder(data)
 		if err := dec.Decode(s); err != nil {
-			log.Printf("Failed to restore game state. %s", err)
+			logf("Failed to restore game state. %s", err)
 		}
 	}
-	return s
 }
 
 // reset clears the saved file.

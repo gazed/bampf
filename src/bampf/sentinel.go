@@ -1,5 +1,5 @@
 // Copyright © 2013-2014 Galvanized Logic Inc.
-// Use is governed by a FreeBSD license found in the LICENSE file.
+// Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
 
@@ -11,10 +11,8 @@ package main
 //    http://www.aiwisdom.com
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"vu"
 	"vu/grid"
 )
@@ -22,13 +20,12 @@ import (
 // sentinel tracks and moves one player enemy. The maze position information
 // is kept as x,y grid spots.
 type sentinel struct {
-	part    vu.Part    // Top level for model transforms.
-	model   vu.Part    // Simple model for initial levels.
-	center  vu.Part    // Add some difference for later levels.
-	prev    *gridSpot  // Sentinels previous location.
-	next    *gridSpot  // Sentinels next location.
-	units   float64    // Maze scale factor
-	chooser *rand.Rand // Random path chooser
+	part   vu.Part   // Top level for model transforms.
+	model  vu.Part   // Simple model for initial levels.
+	center vu.Part   // Add some difference for later levels.
+	prev   *gridSpot // Sentinels previous location.
+	next   *gridSpot // Sentinels next location.
+	units  float64   // Maze scale factor
 }
 
 // newSentinel creates a player enemy.
@@ -47,10 +44,6 @@ func newSentinel(part vu.Part, level, units int, fade float64) *sentinel {
 		s.center.SetRole("flata").SetMesh("cube").SetMaterial("tred")
 		s.center.Role().SetUniform("fd", fade)
 	}
-
-	// Create a different seed for each sentinel by using its memory address.
-	mema, _ := strconv.ParseUint(fmt.Sprintf("%d", &s), 0, 64)
-	s.chooser = rand.New(rand.NewSource(int64(mema)))
 	return s
 }
 
@@ -86,7 +79,7 @@ func (s *sentinel) setGridLocation(gridx, gridy int) {
 	s.prev = &gridSpot{gridx, gridy}
 	s.next = &gridSpot{gridx, gridy}
 	_, gamey, _ := s.part.Location()
-	gamex, gamez := s.next.toGame(gridx, gridy, s.units)
+	gamex, gamez := toGame(gridx, gridy, s.units)
 	s.part.SetLocation(gamex, gamey, gamez)
 }
 
@@ -123,7 +116,7 @@ func (s *sentinel) nextSpot(plan grid.Grid) *gridSpot {
 	if len(choices) > 0 {
 		way := 0
 		if len(choices) > 1 {
-			way = s.chooser.Intn(len(choices))
+			way = rand.Intn(len(choices))
 		}
 		return choices[way]
 	}
@@ -137,7 +130,7 @@ func (s *sentinel) isValidSpot(plan grid.Grid, w, h int, old *gridSpot, x, y int
 		return false
 	}
 	if x >= 0 && y >= 0 && x < w && y < h { // exclude walls.
-		return !plan.IsWall(x, y)
+		return plan.IsOpen(x, y)
 	}
 	if x >= -1 && y >= -1 && x <= w && y <= h { // outside edge ok.
 		return true

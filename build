@@ -1,13 +1,13 @@
 #! /usr/bin/python
-# Copyright (c) 2013-2014 Galvanized Logic Inc.
-# Use is governed by a FreeBSD license found in the LICENSE file.
+# Copyright (c) 2013 Galvanized Logic Inc.
+# Use is governed by a BSD-style license found in the LICENSE file.
 
 """
-The build and distribution script for the Bampf project.  
+The build and distribution script for the Bampf project.
 
 This script detects and builds for the platform that it is on.  All the build
 knowledge for any computer architecture is contained in this script.
-Note that build commands are specified in such a way that they can be easily 
+Note that build commands are specified in such a way that they can be easily
 copied and tested in a shell.
 
 This script is expected to be called by:
@@ -22,7 +22,6 @@ import shutil       # for directory and file manipulation
 import shlex        # run and control shell commands
 import subprocess   # for calling shell commands
 import glob         # for unix pattern matching
-from distutils import dir_util    # for copying directories
 
 def clean():
     # Remove all generated files.
@@ -80,7 +79,7 @@ def buildOSX():
     os.makedirs(base + '/Resources')
     os.makedirs(base + '/Frameworks')
 
-    # create the osx bundle by putting everything in the proper directories. 
+    # create the osx bundle by putting everything in the proper directories.
     subprocess.call(shlex.split('cp src/Info.plist target/Bampf.app/Contents/'))
     subprocess.call(shlex.split('cp target/bampf target/Bampf.app/Contents/MacOS/Bampf'))
     subprocess.call(shlex.split('cp target/resources.zip target/Bampf.app/Contents/Resources/'))
@@ -92,15 +91,6 @@ def buildOSX():
         shutil.rmtree('target/app')
     os.makedirs('target/app')
     subprocess.call(shlex.split('cp -r target/Bampf.app target/app/Bampf.app'))
-
-    # create two signed versions.  One for self distribution, one for the app store.
-    # signOsx('target', '"Developer ID Application: XXX XXX"', '"Developer ID Installer: XXX XXX"')
-    # signOsx('target/app', '"3rd Party Mac Developer Application: XXX XXX"', '"3rd Party Mac Developer Installer: XXX XXX"')
-
-def signOsx(outdir, akey, ikey):
-    # subprocess.call(shlex.split('codesign -fv --entitlements src/Entitlements.plist -s '+akey+' '+outdir+'/Bampf.app'))
-    # subprocess.call(shlex.split('productbuild --version 1.0 --sign '+ikey+' --component '+outdir+'/Bampf.app /Applications '+outdir+'/Bampf.pkg'))
-    subprocess.call(shlex.split('productbuild --version 1.0 --component '+outdir+'/Bampf.app /Applications '+outdir+'/Bampf.pkg'))
 
 def buildWindows():
     print 'Building windows'
@@ -123,16 +113,16 @@ def buildWindows():
     subprocess.call(shlex.split('mv target/bampf target/Bampf.exe'))
 
 def buildLinux():
-    print 'FUTURE Building linux'
+    print 'TODO Building linux'
 
 #------------------------------------------------------------------------------
-# Main program. 
+# Main program.
 
 def usage():
     print 'Usage: build [clean] [src]'
 
 if __name__ == "__main__":
-    options = {'clean'  : clean, 
+    options = {'clean'  : clean,
                'src'    : buildSrc}
     somethingBuilt = False
     for arg in sys.argv:
