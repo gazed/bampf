@@ -5,8 +5,9 @@ package main
 
 import (
 	"sort"
-	"vu"
-	"vu/math/lin"
+
+	"github.com/gazed/vu"
+	"github.com/gazed/vu/math/lin"
 )
 
 // trooper is a cube that represents the players health and

@@ -6,8 +6,9 @@ package main
 import (
 	"fmt"
 	"math"
-	"vu"
-	"vu/grid"
+
+	"github.com/gazed/vu"
+	"github.com/gazed/vu/grid"
 )
 
 // level groups everything needed for a single level.

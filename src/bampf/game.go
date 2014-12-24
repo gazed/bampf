@@ -6,8 +6,9 @@ package main
 import (
 	"container/list"
 	"math"
-	"vu"
-	"vu/math/lin"
+
+	"github.com/gazed/vu"
+	"github.com/gazed/vu/math/lin"
 )
 
 // game keeps track of the game play screen. This includes all game levels

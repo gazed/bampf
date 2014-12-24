@@ -15,7 +15,8 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"time"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // main recovers saved preferences and initializes the game.

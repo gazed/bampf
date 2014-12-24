@@ -8,7 +8,8 @@ package main
 import (
 	"math/rand"
 	"time"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // coreControl tracks available core drop locations and regulates how fast

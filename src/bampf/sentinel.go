@@ -13,8 +13,9 @@ package main
 import (
 	"math"
 	"math/rand"
-	"vu"
-	"vu/grid"
+
+	"github.com/gazed/vu"
+	"github.com/gazed/vu/grid"
 )
 
 // sentinel tracks and moves one player enemy. The maze position information

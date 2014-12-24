@@ -7,7 +7,8 @@ import (
 	"container/list"
 	"math"
 	"math/rand"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // end is the screen that shows the end of game animation. This is a model of
