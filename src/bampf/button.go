@@ -4,7 +4,7 @@
 package main
 
 import (
-	"vu"
+	"github.com/gazed/vu"
 )
 
 // button has both an image/icon and an action. The action can be linked to a key.

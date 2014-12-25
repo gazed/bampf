@@ -1,12 +1,12 @@
 <!-- Copyright © 2013-2014 Galvanized Logic Inc.                       -->
 <!-- Use is governed by a BSD-style license found in the LICENSE file. -->
 
-#bampf
+#Bampf
 
 Bampf is a simple 3D arcade style game. Collect energy cores in order to finish
 a level. Teleport (bampf) to safety or use cloaking abilities to avoid sentinels.
 
-Bampf was created primarily to test the ``vu`` 3D engine. Its levels are used to
+Bampf was created primarily to test the [vu](https://github.com/gazed/vu) 3D engine. Its levels are used to
 benchmark the engine by substantially increasing the number of triangles rendered
 each level. As such the game isn't really meant to be winnable given the large
 number of AI's in the later levels.
@@ -14,18 +14,23 @@ number of AI's in the later levels.
 Build
 -----
 
-* Download and build the ``vu`` engine first. 
-* Ensure GOPATH contains the ``bampf`` and ``vu`` directories.
+* Install the [vu](https://github.com/gazed/vu) engine first. 
 * Create developer builds using ``go build`` in ``bampf/src/bampf``.
   Run the game ``./bampf``.
 * Create product builds using ``build`` in ``bampf``. All build output
   is located in the ``target`` directory. Eg:
-    * OSX:
-        * ``./build src``
-        * ``open target/Bampf.app``
-    * WIN:
-        * ``python build src``
-        * ``target/bampf.exe``
+    * OS X:
+
+        ```bash
+        ./build src
+        open target/Bampf.app
+        ```
+    * Windows:
+
+        ```bash
+        python build src
+        target/bampf.exe
+        ```
 
 **Developer Build Dependencies**
 

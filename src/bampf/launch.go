@@ -5,7 +5,8 @@ package main
 
 import (
 	"container/list"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // launch is the application menu/start screen.  It is the first screen after the

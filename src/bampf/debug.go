@@ -10,7 +10,8 @@ package main
 
 import (
 	"log"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // logger enables logging in debug loads.

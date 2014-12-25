@@ -5,7 +5,8 @@ package main
 
 import (
 	"math"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // lens dictates how a camera moves. The lens can be swapped for different

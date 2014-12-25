@@ -5,8 +5,9 @@ package main
 
 import (
 	"strconv"
-	"vu"
-	"vu/math/lin"
+
+	"github.com/gazed/vu"
+	"github.com/gazed/vu/math/lin"
 )
 
 // hud is the 2D controller for all parts of the games heads-up-display (HUD).

@@ -5,7 +5,8 @@ package main
 
 import (
 	"container/list"
-	"vu"
+
+	"github.com/gazed/vu"
 )
 
 // config is an overlay screen that presents the game options while pausing
