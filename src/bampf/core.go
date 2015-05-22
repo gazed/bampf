@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -15,7 +15,7 @@ import (
 // coreControl tracks available core drop locations and regulates how fast
 // new cores appear.
 type coreControl struct {
-	cores   []vu.Part     // cores available to be collected.
+	cores   []vu.Pov      // cores available to be collected.
 	tiles   []gridSpot    // core drop locations.
 	saved   []gridSpot    // remember the core drop locations for resets.
 	last    time.Time     // last time a core was dropped.
@@ -30,7 +30,7 @@ func newCoreControl(units int, ani *animator) *coreControl {
 	cc := &coreControl{}
 	cc.ani = ani
 	cc.units = float64(units)
-	cc.cores = []vu.Part{}
+	cc.cores = []vu.Pov{}
 	cc.saved = []gridSpot{}
 	cc.tiles = []gridSpot{}
 	cc.spot = &gridSpot{}
@@ -64,7 +64,7 @@ func (cc *coreControl) dropSpot() (gridx, gridy int) {
 
 // dropCore creates a new core. Create it high so that it drops.
 // Return the x, z game location of the dropped core.
-func (cc *coreControl) dropCore(sc vu.Scene, fade float64, gridx, gridy int) (gamex, gamez float64) {
+func (cc *coreControl) dropCore(root vu.Pov, fade float64, gridx, gridy int) (gamex, gamez float64) {
 
 	// remove the dropped spot from the list of available spots.
 	removed := false // sanity check.
@@ -79,7 +79,7 @@ func (cc *coreControl) dropCore(sc vu.Scene, fade float64, gridx, gridy int) (ga
 		logf("core.dropCore: failed to locate what should be a valid drop location")
 		return 0, 0
 	}
-	core := cc.createCore(sc, fade)
+	core := cc.createCore(root, fade)
 
 	// add the core to the list of dropped cores.
 	cc.cores = append(cc.cores, core)
@@ -91,13 +91,12 @@ func (cc *coreControl) dropCore(sc vu.Scene, fade float64, gridx, gridy int) (ga
 
 // remCore destroys the indicated core. The drop spot is now available for new
 // cores. Return the game location of the removed core.
-func (cc *coreControl) remCore(sc vu.Scene, index int) (gamex, gamez float64) {
+func (cc *coreControl) remCore(index int) (gamex, gamez float64) {
 	core := cc.cores[index]
 	cc.cores = append(cc.cores[:index], cc.cores[index+1:]...)
 
 	// remove the core from the display and minimap.
-	core.Dispose()
-	sc.RemPart(core)
+	core.Dispose(vu.POV)
 	gamex, _, gamez = core.Location()
 	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 
@@ -132,12 +131,11 @@ func (cc *coreControl) addDropLocation(gridx, gridy int) {
 // reset puts the core control back to the initial conditions before cores
 // starting dropping. Expected to be called for cleaning up the current
 // level before transitioning to a new level.
-func (cc *coreControl) reset(sc vu.Scene) {
+func (cc *coreControl) reset() {
 	for _, core := range cc.cores {
-		core.Dispose()
-		sc.RemPart(core)
+		core.Dispose(vu.POV)
 	}
-	cc.cores = []vu.Part{}
+	cc.cores = []vu.Pov{}
 	cc.tiles = []gridSpot{}
 	for _, spot := range cc.saved {
 		cc.tiles = append(cc.tiles, gridSpot{spot.x, spot.y})
@@ -145,44 +143,13 @@ func (cc *coreControl) reset(sc vu.Scene) {
 }
 
 // createCore makes the new core model.
-func (cc *coreControl) createCore(sc vu.Scene, fade float64) vu.Part {
-	core := sc.AddPart()
-
-	// combine billboards to get an effect with some movement.
-	cimg := core.AddPart().SetScale(0.25, 0.25, 0.25)
-	cimg.SetCullable(false)
-	cimg.SetRole("bbra").SetMesh("billboard").AddTex("ele")
-	cimg.Role().SetAlpha(0.6)
-	cimg.Role().SetUniform("spin", 1.93)
-	cimg.Role().SetUniform("fd", fade)
-	cimg.Role().Set2D()
-
-	// same billboard rotating the other way.
-	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
-	cimg.SetCullable(false)
-	cimg.SetRole("bbra").SetMesh("billboard").AddTex("ele")
-	cimg.Role().SetAlpha(0.6)
-	cimg.Role().SetUniform("spin", -1.3)
-	cimg.Role().SetUniform("fd", fade)
-	cimg.Role().Set2D()
-
-	// halo billboard rotating one way.
-	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
-	cimg.SetCullable(false)
-	cimg.SetRole("bbra").SetMesh("billboard").AddTex("halo")
-	cimg.Role().SetAlpha(0.4)
-	cimg.Role().SetUniform("spin", -2.0)
-	cimg.Role().SetUniform("fd", fade)
-	cimg.Role().Set2D()
-
-	// halo billboard rotating the other way.
-	cimg = core.AddPart().SetScale(0.25, 0.25, 0.25)
-	cimg.SetCullable(false)
-	cimg.SetRole("bbra").SetMesh("billboard").AddTex("halo")
-	cimg.Role().SetAlpha(0.4)
-	cimg.Role().SetUniform("spin", 1.0)
-	cimg.Role().SetUniform("fd", fade)
-	cimg.Role().Set2D()
+// Create a core image using a single multi-texture shader.
+func (cc *coreControl) createCore(root vu.Pov, fade float64) vu.Pov {
+	core := root.NewPov().SetScale(0.25, 0.25, 0.25)
+	model := core.NewModel("spinball").LoadMesh("billboard")
+	model.AddTex("ele").AddTex("ele").AddTex("halo").AddTex("halo")
+	model.SetAlpha(0.6)
+	model.SetUniform("fd", fade)
 	return core
 }
 
@@ -221,7 +188,7 @@ func toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
 
 // coreDropAnimation shows cores falling when they are first created.
 type coreDropAnimation struct {
-	core    vu.Part // core to animate.
+	core    vu.Pov  // core to animate.
 	x, y, z float64 // core location.
 	drop    float64 // the amount to fall each tick.
 	rest    float64 // final resting location.

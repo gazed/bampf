@@ -17,18 +17,18 @@ Build
 * Install the [vu](https://github.com/gazed/vu) engine first. 
 * Create developer builds using ``go build`` in ``bampf/src/bampf``.
   Run the game ``./bampf``.
-* Create product builds using ``build`` in ``bampf``. All build output
+* Create product builds using ``build.py`` in ``bampf``. All build output
   is located in the ``target`` directory. Eg:
     * OS X:
 
         ```bash
-        ./build src
+        ./build.py src
         open target/Bampf.app
         ```
     * Windows:
 
         ```bash
-        python build src
+        python build.py src
         target/bampf.exe
         ```
 

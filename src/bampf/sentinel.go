@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -21,30 +21,28 @@ import (
 // sentinel tracks and moves one player enemy. The maze position information
 // is kept as x,y grid spots.
 type sentinel struct {
-	part   vu.Part   // Top level for model transforms.
-	model  vu.Part   // Simple model for initial levels.
-	center vu.Part   // Add some difference for later levels.
+	part   vu.Pov    // Top level for model transforms.
+	model  vu.Pov    // Simple model for initial levels.
+	center vu.Pov    // Add some difference for later levels.
 	prev   *gridSpot // Sentinels previous location.
 	next   *gridSpot // Sentinels next location.
 	units  float64   // Maze scale factor
 }
 
 // newSentinel creates a player enemy.
-func newSentinel(part vu.Part, level, units int, fade float64) *sentinel {
+func newSentinel(part vu.Pov, level, units int, fade float64) *sentinel {
 	s := &sentinel{}
 	s.part = part
 	s.units = float64(units)
 	s.part.SetLocation(0, 0.5, 0)
-	s.model = part.AddPart()
-	s.model.SetCullable(false)
-	s.model.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
-	s.model.Role().SetUniform("fd", fade)
 	if level > 0 {
-		s.center = s.part.AddPart().SetScale(0.125, 0.125, 0.125)
-		s.center.SetCullable(false)
-		s.center.SetRole("flata").SetMesh("cube").SetMaterial("tred")
-		s.center.Role().SetUniform("fd", fade)
+		s.center = s.part.NewPov().SetScale(0.125, 0.125, 0.125)
+		m := s.center.NewModel("flata").LoadMesh("cube").LoadMat("tred")
+		m.SetUniform("fd", fade)
 	}
+	s.model = part.NewPov()
+	m := s.model.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m.SetUniform("fd", fade)
 	return s
 }
 

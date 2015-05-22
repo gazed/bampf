@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -18,19 +18,21 @@ import (
 //
 // trooper works with single cubes (cells) of size 2 centered at the origin.
 type trooper struct {
-	part                  vu.Part   // Graphics container.
-	lvl                   int       // Current game level of trooper.
-	eng                   vu.Engine // Games engine.
-	neo                   vu.Part   // Un-injured trooper
-	bits                  []box     // Injured troopers have panels and edge cubes.
-	ipos                  []int     // Remember the initial positions for resets.
-	center                vu.Part   // Center always represented as one piece
-	mid                   int       // Level entry number of cells.
-	cloaked               bool      // Is cloaking turned on.
-	cloakEnergy, cemax    int       // Energy available for cloaking.
-	teleportEnergy, temax int       // Energy available for teleporting.
+	part   vu.Pov   // Graphics container.
+	lvl    int      // Current game level of trooper.
+	neo    vu.Pov   // Un-injured trooper
+	bits   []box    // Injured troopers have panels and edge cubes.
+	ipos   []int    // Remember the initial positions for resets.
+	center vu.Pov   // Center always represented as one piece
+	mid    int      // Level entry number of cells.
+	noise  vu.Noise // Trooper sounds.
 
-	// monitors and sounds.
+	// trooper special powers are cloaking and teleporting.
+	cloaked               bool // Is cloaking turned on.
+	cloakEnergy, cemax    int  // Energy available for cloaking.
+	teleportEnergy, temax int  // Energy available for teleporting.
+
+	// health and energy monitors.
 	hms map[string]healthMonitor // Health event monitors.
 	ems map[string]energyMonitor // Energy event monitors.
 }
@@ -41,10 +43,9 @@ type trooper struct {
 //    level 2: 3x3x3 : 20 edge cubes + 6 panels of 1x1 cubes + 1x1x1 center.
 //    level 3: 4x4x4 : 32 edge cubes + 6 panels of 2x2 cubes + 2x2x2 center.
 //    ...
-func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
+func newTrooper(part vu.Pov, level int) *trooper {
 	tr := &trooper{}
 	tr.lvl = level
-	tr.eng = eng
 	tr.part = part
 	tr.bits = []box{}
 	tr.ipos = []int{}
@@ -65,12 +66,12 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 	cubeSize := 1.0 / float64(tr.lvl+1)
 	centerOffset := cubeSize * 0.5
 	panelCenter := float64(tr.lvl) * centerOffset
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, panelCenter, 0.0, 0.0, tr.lvl))
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, -panelCenter, 0.0, 0.0, tr.lvl))
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, 0.0, panelCenter, 0.0, tr.lvl))
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, 0.0, -panelCenter, 0.0, tr.lvl))
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, 0.0, 0.0, panelCenter, tr.lvl))
-	tr.bits = append(tr.bits, newPanel(eng, tr.part, 0.0, 0.0, -panelCenter, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, panelCenter, 0.0, 0.0, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, -panelCenter, 0.0, 0.0, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, 0.0, panelCenter, 0.0, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, 0.0, -panelCenter, 0.0, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, 0.0, 0.0, panelCenter, tr.lvl))
+	tr.bits = append(tr.bits, newPanel(tr.part, 0.0, 0.0, -panelCenter, tr.lvl))
 
 	// troopers are made out of cubes and panels.
 	mx := float64(-tr.lvl)
@@ -129,13 +130,28 @@ func newTrooper(eng vu.Engine, part vu.Part, level int) *trooper {
 	for cnt, b := range tr.bits {
 		tr.ipos[cnt] = b.box().ccnt
 	}
+
+	// create the noises the trooper can make.
+	tr.noise = part.NewNoise()
+	tr.noise.Add("teleport") // teleportSound
+	tr.noise.Add("fetch")    // fetchSound
+	tr.noise.Add("cloak")    // cloakSound
+	tr.noise.Add("decloak")  // decloakSound
+	tr.noise.Add("collide")  // collideSound
 	return tr
 }
 
+// trooper sound indicies.
+const (
+	teleportSound = iota
+	fetchSound
+	cloakSound
+	decloakSound
+	collideSound
+)
+
 // play the indicated sound.
-func (tr *trooper) play(sound string) {
-	tr.part.Sound(sound).Play()
-}
+func (tr *trooper) play(index int) { tr.noise.Play(index) }
 
 // fullHealth returns true if the player is at full health.
 func (tr *trooper) fullHealth() bool { return tr.neo != nil }
@@ -153,9 +169,9 @@ func (tr *trooper) addCenter() {
 	if tr.lvl > 0 {
 		cubeSize := 1.0 / float64(tr.lvl+1)
 		scale := float64(tr.lvl-1) * cubeSize * 0.45 // leave a gap.
-		tr.center = tr.part.AddPart().SetScale(scale, scale, scale)
-		tr.center.SetRole("flata").SetMesh("cube").SetMaterial("tred")
-		tr.center.Role().SetUniform("fd", 1000)
+		tr.center = tr.part.NewPov().SetScale(scale, scale, scale)
+		m := tr.center.NewModel("flata").LoadMesh("cube").LoadMat("tred")
+		m.SetUniform("fd", 1000)
 	}
 }
 
@@ -229,9 +245,9 @@ func (tr *trooper) detachCores(loss int) {
 // optional center cube.  Called when the trooper reaches full health.
 func (tr *trooper) merge() {
 	tr.trash()
-	tr.neo = tr.part.AddPart().SetScale(0.5, 0.5, 0.5)
-	tr.neo.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
-	tr.neo.Role().SetUniform("fd", 1000)
+	tr.neo = tr.part.NewPov().SetScale(0.5, 0.5, 0.5)
+	m := tr.neo.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m.SetUniform("fd", 1000)
 	tr.addCenter()
 }
 
@@ -252,10 +268,12 @@ func (tr *trooper) trash() {
 		b.trash()
 	}
 	if tr.center != nil {
-		tr.part.RemPart(tr.center)
+		tr.center.Dispose(vu.POV)
 		tr.center = nil
 	}
-	tr.part.RemPart(tr.neo)
+	if tr.neo != nil {
+		tr.neo.Dispose(vu.POV)
+	}
 	tr.neo = nil
 }
 
@@ -273,12 +291,10 @@ func (tr *trooper) addCloakEnergy() {
 func (tr *trooper) cloak(useCloak bool) {
 	if useCloak && tr.cloakEnergy > 0 {
 		tr.cloaked = true
-		tr.eng.PlaceSoundListener(tr.loc())
-		tr.play("cloak")
+		tr.play(cloakSound)
 	} else if !useCloak {
 		tr.cloaked = false
-		tr.eng.PlaceSoundListener(tr.loc())
-		tr.play("decloak")
+		tr.play(decloakSound)
 	}
 }
 
@@ -286,8 +302,7 @@ func (tr *trooper) cloak(useCloak bool) {
 // works if the full amount of teleport energy is available.
 func (tr *trooper) teleport() bool {
 	if tr.teleportEnergy >= tr.temax {
-		tr.eng.PlaceSoundListener(tr.loc())
-		tr.play("teleport")
+		tr.play(teleportSound)
 		tr.teleportEnergy = 0
 		tr.energyChanged()
 		return true
@@ -412,20 +427,18 @@ func (c *cbox) box() *cbox { return c }
 // panel groups 0 or more cubes into the center of one of the troopers
 // six sides.
 type panel struct {
-	eng   vu.Engine // Needed to create new cells.
-	part  vu.Part   // Each panel needs its own part.
-	lvl   int       // Used to scale slab.
-	slab  vu.Part   // Un-injured panel is a single piece.
-	cubes []*cube   // An injured panel is made of cubes.
+	part  vu.Pov  // Each panel needs its own part.
+	lvl   int     // Used to scale slab.
+	slab  vu.Pov  // Un-injured panel is a single piece.
+	cubes []*cube // An injured panel is made of cubes.
 	cbox
 }
 
 // newPanel creates a panel with no cubes. The cubes are added later using
 // panel.addCube().
-func newPanel(eng vu.Engine, part vu.Part, x, y, z float64, level int) *panel {
+func newPanel(part vu.Pov, x, y, z float64, level int) *panel {
 	p := &panel{}
-	p.eng = eng
-	p.part = part.AddPart()
+	p.part = part.NewPov()
 	p.lvl = level
 	p.cubes = []*cube{}
 	p.cx, p.cy, p.cz = x, y, z
@@ -482,8 +495,7 @@ func (p *panel) removeCell() {
 func (p *panel) merge() {
 	p.trash()
 	size := p.csize * 0.5
-	p.slab = p.part.AddPart()
-	p.slab.SetLocation(p.cx, p.cy, p.cz)
+	p.slab = p.part.NewPov().SetLocation(p.cx, p.cy, p.cz)
 	scale := float64(p.lvl-1) * size
 	if (p.cx > p.cy && p.cx > p.cz) || (p.cx < p.cy && p.cx < p.cz) {
 		p.slab.SetScale(size, scale, scale)
@@ -492,15 +504,15 @@ func (p *panel) merge() {
 	} else if (p.cz > p.cx && p.cz > p.cy) || (p.cz < p.cx && p.cz < p.cy) {
 		p.slab.SetScale(scale, scale, size)
 	}
-	p.slab.SetRole("flata").SetMesh("cube").SetMaterial("tblue")
-	p.slab.Role().SetUniform("fd", 1000)
+	m := p.slab.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m.SetUniform("fd", 1000)
 }
 
 // trash clears any visible parts from the panel. It is up to calling methods
 // to ensure the cell count is correct.
 func (p *panel) trash() {
 	if p.slab != nil {
-		p.part.RemPart(p.slab)
+		p.slab.Dispose(vu.POV)
 		p.slab = nil
 	}
 	for _, cube := range p.cubes {
@@ -517,19 +529,18 @@ func (p *panel) trash() {
 // as to their current number of cells which is between 0 (nothing visible),
 // 1-7 (partial) and 8 (merged).
 type cube struct {
-	eng     vu.Engine // Needed to create new cells.
-	part    vu.Part   // For the merged cube.
-	cells   []vu.Part // Max 8 cells per cube.
-	centers csort     // Precalculated center location of each cell.
+	part    vu.Pov   // For the merged cube.
+	cells   []vu.Pov // Max 8 cells per cube.
+	centers csort    // Precalculated center location of each cell.
 	cbox
 }
 
 // newCube's are often started with cube size of 1 corner, 2 edges,
 // or 4 bottom side pieces.
-func newCube(part vu.Part, x, y, z, cubeSize float64) *cube {
+func newCube(part vu.Pov, x, y, z, cubeSize float64) *cube {
 	c := &cube{}
-	c.part = part.AddPart()
-	c.cells = []vu.Part{}
+	c.part = part.NewPov()
+	c.cells = []vu.Pov{}
 	c.cx, c.cy, c.cz, c.csize = x, y, z, cubeSize
 	c.ccnt, c.cmax = 0, 8
 	c.mergec = func() { c.merge() }
@@ -540,14 +551,14 @@ func newCube(part vu.Part, x, y, z, cubeSize float64) *cube {
 	// calculate the cell center locations (unsorted)
 	qs := c.csize * 0.25
 	c.centers = csort{
-		&lin.V3{x - qs, y - qs, z - qs},
-		&lin.V3{x - qs, y - qs, z + qs},
-		&lin.V3{x - qs, y + qs, z - qs},
-		&lin.V3{x - qs, y + qs, z + qs},
-		&lin.V3{x + qs, y - qs, z - qs},
-		&lin.V3{x + qs, y - qs, z + qs},
-		&lin.V3{x + qs, y + qs, z - qs},
-		&lin.V3{x + qs, y + qs, z + qs},
+		&lin.V3{X: x - qs, Y: y - qs, Z: z - qs},
+		&lin.V3{X: x - qs, Y: y - qs, Z: z + qs},
+		&lin.V3{X: x - qs, Y: y + qs, Z: z - qs},
+		&lin.V3{X: x - qs, Y: y + qs, Z: z + qs},
+		&lin.V3{X: x + qs, Y: y - qs, Z: z - qs},
+		&lin.V3{X: x + qs, Y: y - qs, Z: z + qs},
+		&lin.V3{X: x + qs, Y: y + qs, Z: z - qs},
+		&lin.V3{X: x + qs, Y: y + qs, Z: z + qs},
 	}
 	return c
 }
@@ -570,19 +581,18 @@ func (c *cube) panelSort(rx, ry, rz float64, startCount int) {
 // addCell creates and adds a new cell to the cube.
 func (c *cube) addCell() {
 	center := c.centers[c.ccnt-1]
-	cell := c.part.AddPart()
-	cell.SetLocation(center.X, center.Y, center.Z)
+	cell := c.part.NewPov().SetLocation(center.X, center.Y, center.Z)
 	scale := c.csize * 0.20 // leave a gap (0.25 for no gap).
 	cell.SetScale(scale, scale, scale)
-	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
-	cell.Role().SetUniform("fd", 1000)
+	m := cell.NewModel("flata").LoadMesh("cube").LoadMat("tgreen")
+	m.SetUniform("fd", 1000)
 	c.cells = append(c.cells, cell)
 }
 
 // removeCell removes the last cell from the list of cube cells.
 func (c *cube) removeCell() {
 	last := len(c.cells)
-	c.part.RemPart(c.cells[last-1])
+	c.cells[last-1].Dispose(vu.POV)
 	c.cells[last-1] = nil
 	c.cells = c.cells[:last-1]
 }
@@ -592,10 +602,9 @@ func (c *cube) removeCell() {
 // merge is called.
 func (c *cube) merge() {
 	c.trash()
-	cell := c.part.AddPart()
-	cell.SetLocation(c.cx, c.cy, c.cz)
-	cell.SetRole("flata").SetMesh("cube").SetMaterial("tgreen")
-	cell.Role().SetUniform("fd", 1000)
+	cell := c.part.NewPov().SetLocation(c.cx, c.cy, c.cz)
+	m := cell.NewModel("flata").LoadMesh("cube").LoadMat("tgreen")
+	m.SetUniform("fd", 1000)
 	scale := (c.csize - (c.csize * 0.15)) * 0.5 // leave a gap (just c.csize for no gap)
 	cell.SetScale(scale, scale, scale)
 	c.cells = append(c.cells, cell)
@@ -638,7 +647,7 @@ func (s ssort) Len() int           { return len(s.c) }
 func (s ssort) Swap(i, j int)      { s.c[i], s.c[j] = s.c[j], s.c[i] }
 func (s ssort) Less(i, j int) bool { return s.Dtoc(s.c[i]) < s.Dtoc(s.c[j]) }
 func (s ssort) Dtoc(v *lin.V3) float64 {
-	normal := &lin.V3{s.x, s.y, s.z}
+	normal := &lin.V3{X: s.x, Y: s.y, Z: s.z}
 	dot := v.Dot(normal)
 	dx := normal.X * dot
 	dy := normal.Y * dot

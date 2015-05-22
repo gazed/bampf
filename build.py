@@ -1,5 +1,5 @@
 #! /usr/bin/python
-# Copyright (c) 2013 Galvanized Logic Inc.
+# Copyright (c) 2013-2015 Galvanized Logic Inc.
 # Use is governed by a BSD-style license found in the LICENSE file.
 
 """
@@ -45,12 +45,12 @@ def buildSrc():
 
 def buildBinary(flags):
     print 'Building executable'
-    subprocess.call(shlex.split('go fmt ./src/bampf'))
+    subprocess.call(shlex.split('go fmt bampf'))
     try:
         version = subprocess.check_output(shlex.split('git describe')).strip()
     except subprocess.CalledProcessError:
         version = 'v0.0'
-    command = 'go build -ldflags "-X main.version '+version+' '+flags+'" -o target/bampf.raw ./src/bampf'
+    command = 'go build -ldflags "-X main.version '+version+' '+flags+'" -o target/bampf.raw bampf'
     out, err = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
     print('built binary with command: ' + command)
 

@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 // Package bampf is a 3D arcade collection game with random levels.
@@ -24,26 +24,25 @@ func main() {
 	mp := &bampf{}
 	var err error
 	var x, y int
-	x, y, mp.wx, mp.wy, mp.mute = mp.prefs()
-	if mp.eng, err = vu.New("Bampf", x, y, mp.wx, mp.wy); err != nil {
+	x, y, mp.ww, mp.wh, mp.mute = mp.prefs()
+	mp.setLogger(mp)
+	if err = vu.New(mp, "Bampf", x, y, mp.ww, mp.wh); err != nil {
 		logf("Failed to initialize engine %s", err)
 		return
 	}
-	mp.setLogger(mp)
-	mp.eng.SetDirector(mp)
-	mp.create()
-	defer mp.eng.Shutdown()
-	defer func() {
-		if r := recover(); r != nil {
-			logf("Panic %s: %s Shutting down.", r, debug.Stack())
-		}
-	}()
-	mp.eng.Action() // run the engine until the user decides to quit.
+	defer catchErrors()
 }
 
 // version is set by the build using ld flags. Eg.
 //    go build -ldflags "-X main.version `git describe`"
 var version string
+
+// catchErrors is for debugging developer loads.
+func catchErrors() {
+	if r := recover(); r != nil {
+		logf("Panic %s: %s Shutting down.", r, debug.Stack())
+	}
+}
 
 // main
 // ===========================================================================
@@ -54,7 +53,7 @@ var version string
 //   1. Prepare and share the initial state and data structures.
 //   2. Ensure orderly switching between game states.
 type bampf struct {
-	eng         vu.Engine  // Game engine and user input.
+	eng         vu.Eng     // Engine.
 	state       gameState  // Which main screen is active.
 	launch      *launch    // Initial choosing screen.
 	game        *game      // Main game play screen.
@@ -63,7 +62,7 @@ type bampf struct {
 	active      screen     // Currently drawn screen (state).
 	eventq      *list.List // Game event queue.
 	mute        bool       // Track if the sound is on or off.
-	wx, wy      int        // Application window size.
+	ww, wh      int        // Application window size.
 	ani         *animator  // Handles short animations.
 	launchLevel int        // Choosen by the user on the launch screen.
 	keys        []string   // Restored key bindings.
@@ -82,23 +81,25 @@ const (
 type gameState func(int) gameState
 
 // create the game screens before the main action/update loop is started.
-func (mp *bampf) create() {
+func (mp *bampf) Create(eng vu.Eng, s *vu.State) {
 	rand.Seed(time.Now().UnixNano())
+	mp.eng = eng
 	mp.ani = &animator{}
 	mp.setMute(mp.mute)
 	mp.eventq = list.New()
-	mp.createScreens()
+	mp.createScreens(s.W, s.H)
 	mp.state = mp.choosing
 	mp.active = mp.launch
 	mp.active.activate(screenActive)
+	eng.SetColor(1, 1, 1, 1) // White as default background.
 }
 
 // Update is a regular engine callback and is passed onto the currently
 // active screen. Update will run many times a second and should return
 // promptly.
-func (mp *bampf) Update(in *vu.Input) {
+func (mp *bampf) Update(eng vu.Eng, in *vu.Input, s *vu.State) {
 	if in.Resized {
-		mp.resize()
+		mp.resize(s.X, s.Y, s.W, s.H)
 	}
 	if in.Focus {
 		mp.ani.animate(in.Dt)                 // run active animations
@@ -112,15 +113,11 @@ func (mp *bampf) Update(in *vu.Input) {
 
 // createScreens creates the different application screens and anything
 // else needed before the render loop takes over.
-func (mp *bampf) createScreens() *bampf {
+func (mp *bampf) createScreens(ww, wh int) *bampf {
 	mp.launch = newLaunchScreen(mp)
 	mp.game = newGameScreen(mp)
-	mp.end = newEndScreen(mp)
-	mp.config = newConfigScreen(mp, mp.keys)
-	mp.eng.Enable(vu.BLEND, true)
-	mp.eng.Enable(vu.CULL, true)
-	mp.eng.Enable(vu.DEPTH, true)
-	mp.eng.Color(1.0, 1.0, 1.0, 1)
+	mp.end = newEndScreen(mp, ww, wh)
+	mp.config = newConfigScreen(mp, mp.keys, ww, wh)
 
 	// ensure game has a intial set of keys.
 	mp.game.setKeys(mp.keys)
@@ -259,15 +256,13 @@ func (mp *bampf) skipAnimation() {
 }
 
 // resize adjusts all the screens to the current game window size.
-func (mp *bampf) resize() {
-	x, y, w, h := mp.eng.Size()
-	mp.eng.Resize(x, y, w, h)
-	mp.wx, mp.wy = w, h
-	mp.launch.resize(w, h)
-	mp.game.resize(w, h)
-	mp.end.resize(w, h)
-	mp.config.resize(w, h)
-	mp.setWindow(x, y, w, h)
+func (mp *bampf) resize(wx, wy, ww, wh int) {
+	mp.ww, mp.wh = ww, wh
+	mp.launch.resize(ww, wh)
+	mp.game.resize(ww, wh)
+	mp.end.resize(ww, wh)
+	mp.config.resize(ww, wh)
+	mp.setWindow(wx, wy, ww, wh)
 }
 
 // prefs recovers the saved game preferences.

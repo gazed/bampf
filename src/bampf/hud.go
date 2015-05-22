@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -12,32 +12,34 @@ import (
 
 // hud is the 2D controller for all parts of the games heads-up-display (HUD).
 type hud struct {
-	area            // Hud fills up the full screen.
-	scene vu.Scene  // Scene graph plus camera and lighting.
-	cam   vu.Camera // Quick access to the scene camera.
-	pl    *player   // Player model.
-	xp    *xpbar    // Show cores collected and current energy.
-	mm    *minimap  // Show overhead map centered on player.
-	ce    vu.Part   // Cloaking effect.
-	te    vu.Part   // Teleport effect.
-	ee    vu.Part   // Energy loss effect.
+	area           // Hud fills up the full screen.
+	root vu.Pov    //
+	view vu.View   // Scene graph plus camera and lighting.
+	cam  vu.Camera // Quick access to the scene camera.
+	pl   *player   // Player model.
+	xp   *xpbar    // Show cores collected and current energy.
+	mm   *minimap  // Show overhead map centered on player.
+	ce   vu.Pov    // Cloaking effect.
+	te   vu.Pov    // Teleport effect.
+	ee   vu.Pov    // Energy loss effect.
 }
 
 // newHud creates all the various parts of the heads up display.
-func newHud(eng vu.Engine, sentryCount int) *hud {
+func newHud(eng vu.Eng, sentryCount, wx, wy, ww, wh int) *hud {
 	hd := &hud{}
-	hd.scene = eng.AddScene(vu.VO)
-	hd.scene.Set2D()
-	hd.cam = hd.scene.Cam()
-	hd.setSize(eng.Size())
+	hd.root = eng.Root().NewPov()
+	hd.view = hd.root.NewView()
+	hd.view.SetUI()
+	hd.cam = hd.view.Cam()
+	hd.setSize(wx, wy, ww, wh)
 
 	// create the HUD parts.
-	hd.pl = newPlayer(eng, hd.scene, hd.w, hd.h)
-	hd.xp = newXpbar(eng, hd.scene, hd.w, hd.h)
-	hd.mm = newMinimap(eng, sentryCount)
-	hd.ce = hd.cloakingEffect(hd.scene)
-	hd.te = hd.teleportEffect(hd.scene)
-	hd.ee = hd.energyLossEffect(hd.scene)
+	hd.pl = newPlayer(hd.root, hd.w, hd.h)
+	hd.xp = newXpbar(hd.root, hd.w, hd.h)
+	hd.mm = newMinimap(eng.Root().NewPov(), sentryCount)
+	hd.ce = hd.cloakingEffect(hd.root)
+	hd.te = hd.teleportEffect(hd.root)
+	hd.ee = hd.energyLossEffect(hd.root)
 	hd.resize(hd.w, hd.h)
 	return hd
 }
@@ -67,7 +69,7 @@ func (hd *hud) resize(screenWidth, screenHeight int) {
 // setVisible turns the HUD on/off. This is used when transitioning
 // between levels.
 func (hd *hud) setVisible(isVisible bool) {
-	hd.scene.SetVisible(isVisible)
+	hd.view.SetVisible(isVisible)
 	hd.mm.setVisible(isVisible)
 }
 
@@ -75,50 +77,52 @@ func (hd *hud) setVisible(isVisible bool) {
 func (hd *hud) setLevel(lvl *level) {
 	hd.pl.setLevel(lvl)
 	hd.xp.setLevel(lvl)
-	hd.mm.setLevel(lvl.scene, lvl)
+	hd.mm.setLevel(lvl.view, lvl)
 }
 
 // have the hud wrap the minimap specifics so as to provide a single
 // outside interface.
-func (hd *hud) addWall(gamex, gamez float64)             { hd.mm.addWall(gamex, gamez) }
-func (hd *hud) remCore(gamex, gamez float64)             { hd.mm.remCore(gamex, gamez) }
-func (hd *hud) addCore(gamex, gamez float64)             { hd.mm.addCore(gamex, gamez) }
-func (hd *hud) resetCores()                              { hd.mm.resetCores() }
-func (hd *hud) update(sc vu.Scene, sentries []*sentinel) { hd.mm.update(sc, sentries) }
+func (hd *hud) addWall(gamex, gamez float64)           { hd.mm.addWall(gamex, gamez) }
+func (hd *hud) remCore(gamex, gamez float64)           { hd.mm.remCore(gamex, gamez) }
+func (hd *hud) addCore(gamex, gamez float64)           { hd.mm.addCore(gamex, gamez) }
+func (hd *hud) resetCores()                            { hd.mm.resetCores() }
+func (hd *hud) update(v vu.View, sentries []*sentinel) { hd.mm.update(v, sentries) }
 
 // cloakingEffect creates the model shown when the user cloaks.
-func (hd *hud) cloakingEffect(scene vu.Scene) vu.Part {
-	ce := scene.AddPart()
+func (hd *hud) cloakingEffect(root vu.Pov) vu.Pov {
+	ce := root.NewPov()
 	ce.SetVisible(false)
-	ce.SetRole("uv").SetMesh("icon").AddTex("cloakon").SetMaterial("half")
+	ce.NewModel("uv").LoadMesh("icon").AddTex("cloakon").SetAlpha(0.5)
 	return ce
 }
 func (hd *hud) cloakingActive(isActive bool) { hd.ce.SetVisible(isActive) }
 
 // teleportEffect creates the model shown when the user teleports.
-func (hd *hud) teleportEffect(scene vu.Scene) vu.Part {
-	te := scene.AddPart()
+func (hd *hud) teleportEffect(root vu.Pov) vu.Pov {
+	te := root.NewPov()
 	te.SetVisible(false)
-	te.SetRole("uvra").SetMesh("icon").AddTex("smoke").SetMaterial("half")
-	te.Role().SetUniform("spin", 10.0)
-	te.Role().SetUniform("fd", 1000)
+	m := te.NewModel("uvra").LoadMesh("icon").AddTex("smoke")
+	m.SetAlpha(0.5)
+	m.SetUniform("spin", 10.0)
+	m.SetUniform("fd", 1000)
 	return te
 }
 func (hd *hud) teleportActive(isActive bool) { hd.te.SetVisible(isActive) }
-func (hd *hud) teleportFade(alpha float64)   { hd.te.Role().SetAlpha(alpha) }
+func (hd *hud) teleportFade(alpha float64)   { hd.te.Model().SetAlpha(alpha) }
 
 // energyLossEffect creates the model shown when the player gets hit
 // by a sentinel.
-func (hd *hud) energyLossEffect(scene vu.Scene) vu.Part {
-	ee := scene.AddPart()
+func (hd *hud) energyLossEffect(root vu.Pov) vu.Pov {
+	ee := root.NewPov()
 	ee.SetVisible(false)
-	ee.SetRole("uvra").SetMesh("icon").AddTex("loss").SetMaterial("half")
-	ee.Role().SetUniform("fd", 1000)
-	ee.Role().SetUniform("spin", 2.0)
+	m := ee.NewModel("uvra").LoadMesh("icon").AddTex("loss")
+	m.SetAlpha(0.5)
+	m.SetUniform("fd", 1000)
+	m.SetUniform("spin", 2.0)
 	return ee
 }
 func (hd *hud) energyLossActive(isActive bool) { hd.ee.SetVisible(isActive) }
-func (hd *hud) energyLossFade(alpha float64)   { hd.ee.Role().SetAlpha(alpha) }
+func (hd *hud) energyLossFade(alpha float64)   { hd.ee.Model().SetAlpha(alpha) }
 
 // hud
 // ===========================================================================
@@ -131,16 +135,15 @@ func (hd *hud) energyLossFade(alpha float64)   { hd.ee.Role().SetAlpha(alpha) }
 type player struct {
 	cx, cy float64  // Center location.
 	player *trooper // Composite model of the player.
-	bg     vu.Part  // Health status background.
+	bg     vu.Pov   // Health status background.
 }
 
 // newPlayer sets the player hud location and creates the white background.
-func newPlayer(eng vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *player {
+func newPlayer(root vu.Pov, screenWidth, screenHeight int) *player {
 	pl := &player{}
 	pl.cx, pl.cy = 100, 100
-	pl.bg = scene.AddPart().SetScale(110, 110, 1)
-	pl.bg.SetLocation(pl.cx, pl.cy, 0)
-	pl.bg.SetRole("uvm").SetMesh("icon").AddTex("hudbg").SetMaterial("green")
+	pl.bg = root.NewPov().SetScale(110, 110, 1).SetLocation(pl.cx, pl.cy, 0)
+	pl.bg.NewModel("uv").LoadMesh("icon").AddTex("hudbg")
 	return pl
 }
 
@@ -150,7 +153,7 @@ func (pl *player) setLevel(lvl *level) {
 	pl.player = lvl.player
 
 	// twist the player about 15 degrees around X and 15 degrees around Z.
-	pl.player.part.SetRotation(0.24, 0.16, 0.16, 0.95)
+	pl.player.part.SetRotation(&lin.Q{X: 0.24, Y: 0.16, Z: 0.16, W: 0.95})
 	pl.player.part.SetLocation(pl.cx, pl.cy, 0)
 }
 
@@ -162,65 +165,63 @@ func (pl *player) setLevel(lvl *level) {
 // progress bars.
 type xpbar struct {
 	area
-	eng    vu.Engine
 	border int      // Offset from the edge of the screen.
 	linew  int      // Line width for the box.
 	bh, bw int      // Bar height and width.
-	bg     vu.Part  // Health background bar.
-	fg     vu.Part  // Health foreground bar.
-	cbg    vu.Part  // Cloak energy background bar.
-	cfg    vu.Part  // Cloak energy foreground bar.
-	tbg    vu.Part  // Teleport energy background bar.
-	tfg    vu.Part  // Teleport energy foreground bar.
-	hb     vu.Part  // Display health amount.
+	bg     vu.Pov   // Health background bar.
+	fg     vu.Pov   // Health foreground bar.
+	cbg    vu.Pov   // Cloak energy background bar.
+	cfg    vu.Pov   // Cloak energy foreground bar.
+	tbg    vu.Pov   // Teleport energy background bar.
+	tfg    vu.Pov   // Teleport energy foreground bar.
+	hb     vu.Pov   // Display health amount.
 	hbw    int      // Display health width in pixels.
-	tk     vu.Part  // Display teleport key.
+	tk     vu.Pov   // Display teleport key.
 	tkw    int      // Display key width in pixels.
-	ck     vu.Part  // Display cloak key.
+	ck     vu.Pov   // Display cloak key.
 	ckw    int      // Display key width in pixels.
 	tr     *trooper // Current player injected with SetStage.
 }
 
 // newXpbar creates all three status bars.
-func newXpbar(e vu.Engine, scene vu.Scene, screenWidth, screenHeight int) *xpbar {
+func newXpbar(root vu.Pov, screenWidth, screenHeight int) *xpbar {
 	xp := &xpbar{}
-	xp.eng = e
 	xp.border = 5
 	xp.linew = 2
 	xp.setSize(screenWidth, screenHeight)
 
 	// add the xp background and foreground bars.
-	xp.bg = scene.AddPart()
-	xp.bg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
-	xp.fg = scene.AddPart()
-	xp.fg.SetRole("uv").SetMesh("icon").AddTex("xpgreen").SetMaterial("green")
+	xp.bg = root.NewPov()
+	xp.bg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
+	xp.fg = root.NewPov()
+	xp.fg.NewModel("uv").LoadMesh("icon").AddTex("xpgreen")
 
 	// add the xp bar text.
-	xp.hb = scene.AddPart()
-	xp.hb.SetRole("uv").AddTex("weblySleek22White").SetFont("weblySleek22")
-	xp.hbw, _ = xp.hb.Role().SetPhrase("0")
+	xp.hb = root.NewPov()
+	m := xp.hb.NewModel("uv").AddTex("weblySleek22White").LoadFont("weblySleek22")
+	xp.hbw = m.SetPhrase("0").PhraseWidth()
 
 	// teleport energy background and foreground bars.
-	xp.tbg = scene.AddPart()
-	xp.tbg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
-	xp.tfg = scene.AddPart()
-	xp.tfg.SetRole("uv").SetMesh("icon").AddTex("xpblue").SetMaterial("green")
+	xp.tbg = root.NewPov()
+	xp.tbg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
+	xp.tfg = root.NewPov()
+	xp.tfg.NewModel("uv").LoadMesh("icon").AddTex("xpblue")
 
 	// the teleport bar text.
-	xp.tk = scene.AddPart()
-	xp.tk.SetRole("uv").AddTex("weblySleek16White").SetFont("weblySleek16")
-	xp.tkw, _ = xp.tk.Role().SetPhrase("0")
+	xp.tk = root.NewPov()
+	m = xp.tk.NewModel("uv").AddTex("weblySleek16White").LoadFont("weblySleek16")
+	xp.tkw = m.SetPhrase("0").PhraseWidth()
 
 	// cloak energy background and foreground bars.
-	xp.cbg = scene.AddPart()
-	xp.cbg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
-	xp.cfg = scene.AddPart()
-	xp.cfg.SetRole("uv").SetMesh("icon").AddTex("xpblue").SetMaterial("green")
+	xp.cbg = root.NewPov()
+	xp.cbg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
+	xp.cfg = root.NewPov()
+	xp.cfg.NewModel("uv").LoadMesh("icon").AddTex("xpblue")
 
 	// the cloak bar text.
-	xp.ck = scene.AddPart()
-	xp.ck.SetRole("uv").AddTex("weblySleek16White").SetFont("weblySleek16")
-	xp.ckw, _ = xp.ck.Role().SetPhrase("0")
+	xp.ck = root.NewPov()
+	m = xp.ck.NewModel("uv").AddTex("weblySleek16White").LoadFont("weblySleek16")
+	xp.ckw = m.SetPhrase("0").PhraseWidth()
 	xp.resize(screenWidth, screenHeight)
 	return xp
 }
@@ -263,15 +264,15 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 	maxCores := high / gameCellGain[xp.tr.lvl-1]
 	coresNeeded := (high - health) / gameCellGain[xp.tr.lvl-1]
 	coreCount := strconv.Itoa(maxCores-coresNeeded) + "/" + strconv.Itoa(maxCores)
-	xp.hbw, _ = xp.hb.Role().SetPhrase(coreCount)
+	xp.hbw = xp.hb.Model().SetPhrase(coreCount).PhraseWidth()
 	xp.hb.SetLocation(xp.cx-float64(xp.hbw/2), xp.cy*0.5, 0)
 
 	// turn on the warning colour if player has less than the starting amount of cores.
 	barMax := float64(xp.bw/2 - xp.linew)
 	if health >= warn {
-		xp.fg.Role().UseTex("xpcyan", 0)
+		xp.fg.Model().SetTex(0, "xpcyan")
 	} else {
-		xp.fg.Role().UseTex("xpred", 0)
+		xp.fg.Model().SetTex(0, "xpred")
 	}
 	healthBar := float64(health) / float64(high) * barMax
 	zeroSpot := float64(xp.border) + healthBar + float64(xp.linew-xp.border)
@@ -283,9 +284,9 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 func (xp *xpbar) energyUpdated(teleportEnergy, tmax, cloakEnergy, cmax int) {
 	tratio := float64(teleportEnergy) / float64(tmax)
 	if tratio == 1.0 {
-		xp.tfg.Role().UseTex("xpblue", 0)
+		xp.tfg.Model().SetTex(0, "xpblue")
 	} else {
-		xp.tfg.Role().UseTex("xpred", 0)
+		xp.tfg.Model().SetTex(0, "xpred")
 	}
 	xp.tfg.SetLocation(xp.cx-float64(xp.w)/10, xp.cy+35, 0)
 	xp.tfg.SetScale((float64(xp.bw/10))*tratio, float64(xp.bh-xp.y)-7, 1)
@@ -307,8 +308,8 @@ func (xp *xpbar) setLevel(lvl *level) {
 // mappings are changed.
 func (xp *xpbar) updateKeys(teleportKey, cloakKey string) {
 	if xp.tk != nil && xp.ck != nil {
-		xp.tk.Role().SetPhrase(teleportKey)
-		xp.ck.Role().SetPhrase(cloakKey)
+		xp.tk.Model().SetPhrase(teleportKey)
+		xp.ck.Model().SetPhrase(cloakKey)
 	}
 }
 
@@ -320,60 +321,56 @@ func (xp *xpbar) updateKeys(teleportKey, cloakKey string) {
 // 2D perspective.
 type minimap struct {
 	area             // Rectangular area.
-	scene  vu.Scene  // Xztoxy scene.
+	view   vu.View   // Xztoxy scene.
 	cam    vu.Camera // Quick access to the scene camera.
-	eng    vu.Engine // Engine for creating a scene and parts.
-	cores  []vu.Part // Keep track of the cores for removal.
-	part   vu.Part   // Used to transform all the minimap models.
-	bg     vu.Part   // The white background.
+	cores  []vu.Pov  // Keep track of the cores for removal.
+	part   vu.Pov    // Used to transform all the minimap models.
+	bg     vu.Pov    // The white background.
 	scale  float64   // Minimap sizing.
-	ppm    vu.Part   // Player position marker.
-	cpm    vu.Part   // Center of map position marker.
-	spms   []vu.Part // Sentry position markers.
+	ppm    vu.Pov    // Player position marker.
+	cpm    vu.Pov    // Center of map position marker.
+	spms   []vu.Pov  // Sentry position markers.
 	radius int       // How much of the map is displayed from the center.
 }
 
 // newMinimap initializes the minimap. It still needs to be populated.
-func newMinimap(eng vu.Engine, numTroops int) *minimap {
+func newMinimap(root vu.Pov, numTroops int) *minimap {
 	mm := &minimap{}
-	mm.eng = eng
 	mm.radius = 120
 	mm.scale = 5.0
-	mm.cores = []vu.Part{}
-	mm.scene = eng.AddScene(vu.XZ_XY)
-	mm.scene.SetCuller(vu.NewRadiusCuller(float64(mm.radius)))
-	mm.scene.Set2D()
-	mm.cam = mm.scene.Cam()
-	mm.setSize(eng.Size())
+	mm.cores = []vu.Pov{}
+	mm.view = root.NewView()
+	mm.view.SetUI()
+	mm.view.SetCull(vu.NewRadiusCull(float64(mm.radius)))
+	mm.cam = mm.view.Cam()
+	mm.cam.SetTransform(vu.XZ_XY)
 
 	// create the parent for all the visible minimap pieces.
-	mm.part = mm.scene.AddPart()
-	mm.part.SetCullable(false)
-	mm.part.SetLocation(float64(mm.x), 0, float64(-mm.y))
+	mm.part = root.NewPov().SetLocation(float64(mm.x), 0, float64(-mm.y))
 
 	// add the white background.
-	mm.bg = mm.part.AddPart().SetScale(110, 1, 110)
-	mm.bg.SetRole("uvm").SetMesh("icon_xz").AddTex("hudbg").SetMaterial("green")
+	mm.bg = mm.part.NewPov().SetScale(110, 1, 110)
+	mm.bg.NewModel("uv").LoadMesh("icon_xz").AddTex("hudbg")
 
 	// create the sentinel position markers
-	mm.spms = []vu.Part{}
+	mm.spms = []vu.Pov{}
 	for cnt := 0; cnt < numTroops; cnt++ {
-		tpm := mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
-		tpm.SetRole("flat").SetMesh("square_xz").SetMaterial("tred")
+		tpm := mm.part.NewPov().SetScale(mm.scale, mm.scale, mm.scale)
+		tpm.NewModel("alpha").LoadMesh("square_xz").LoadMat("tred")
 		mm.spms = append(mm.spms, tpm)
 	}
 
 	// create the player marker and center map marker.
-	mm.cpm = mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
-	mm.cpm.SetRole("flat").SetMesh("square_xz").SetMaterial("blue")
-	mm.ppm = mm.part.AddPart().SetScale(mm.scale, mm.scale, mm.scale)
-	mm.ppm.SetRole("flat").SetMesh("tri_xz").SetMaterial("tblack")
+	mm.cpm = mm.part.NewPov().SetScale(mm.scale, mm.scale, mm.scale)
+	mm.cpm.NewModel("alpha").LoadMesh("square_xz").LoadMat("blue")
+	mm.ppm = mm.part.NewPov().SetScale(mm.scale, mm.scale, mm.scale)
+	mm.ppm.NewModel("alpha").LoadMesh("tri_xz").LoadMat("tblack")
 	return mm
 }
 
 // setVisible (un)hides all the minimap objects.
 func (mm *minimap) setVisible(isVisible bool) {
-	mm.scene.SetVisible(isVisible)
+	mm.view.SetVisible(isVisible)
 }
 
 // resize is responsible for keeping the minimap at the bottom
@@ -391,35 +388,34 @@ func (mm *minimap) setSize(x, y, width, height int) {
 }
 
 // setLevel is called when a level transition happens.
-func (mm *minimap) setLevel(sc vu.Scene, lvl *level) {
-	x, y, z := sc.Cam().Location()
+func (mm *minimap) setLevel(v vu.View, lvl *level) {
+	x, y, z := v.Cam().Location()
 	mm.cam.SetLocation(x*mm.scale, y*mm.scale, z*mm.scale)
 
 	// adjust the center location based on the game maze center.
 	mm.cx, mm.cy = float64(lvl.gcx*lvl.units)*mm.scale, float64(-lvl.gcy*lvl.units)*mm.scale
 	mm.ppm.SetLocation(x, y, z)
 	mm.bg.SetLocation(x, y, z)
-	mm.ppm.SetRotation(sc.Cam().Rotation())
+	mm.ppm.SetRotation(v.Cam().Lookxz())
 	mm.setSentryLocations(lvl.sentries)
 	lvl.player.monitorHealth("mmap", mm)
 }
 
 // addWall adds a block representing a wall to the minimap.
 func (mm *minimap) addWall(x, y float64) {
-	wall := mm.part.AddPart()
+	wall := mm.part.NewPov().SetScale(mm.scale, mm.scale, mm.scale)
 	wall.SetLocation(x*mm.scale, 0, y*mm.scale)
-	wall.SetScale(mm.scale, mm.scale, mm.scale)
-	wall.SetRole("flat").SetMesh("square_xz").SetMaterial("gray")
+	wall.NewModel("alpha").LoadMesh("square_xz").LoadMat("gray")
 }
 
 // addCore adds a small block representing an energy core to the minimap.
 func (mm *minimap) addCore(gamex, gamey float64) {
 	scale := mm.scale
-	cm := mm.part.AddPart()
+	cm := mm.part.NewPov()
 	cm.SetLocation(gamex*scale, 0, gamey*scale)
 	scale *= 0.5
 	cm.SetScale(scale, scale, scale)
-	cm.SetRole("flat").SetMesh("square_xz").SetMaterial("green")
+	cm.NewModel("alpha").LoadMesh("square_xz").LoadMat("green")
 	mm.cores = append(mm.cores, cm)
 }
 
@@ -431,7 +427,7 @@ func (mm *minimap) remCore(gamex, gamez float64) {
 		cx, _, cz := core.Location()
 		cx, cz = lin.Round(cx, 0), lin.Round(cz, 0)
 		if cx == gx && cz == gz {
-			mm.part.RemPart(core)
+			core.Dispose(vu.POV)
 			mm.cores = append(mm.cores[:index], mm.cores[index+1:]...)
 			return
 		}
@@ -443,29 +439,29 @@ func (mm *minimap) remCore(gamex, gamez float64) {
 // this level is clear of cores the next time it is activated.
 func (mm *minimap) resetCores() {
 	for _, core := range mm.cores {
-		mm.part.RemPart(core)
+		core.Dispose(vu.POV)
 	}
-	mm.cores = []vu.Part{}
+	mm.cores = []vu.Pov{}
 }
 
 // healthMonitor:healthUpdated. Update the center colour of the maze
 // based on the player health.
 func (mm *minimap) healthUpdated(health, warn, high int) {
 	if health == high {
-		mm.cpm.Role().SetMaterial("green")
+		mm.cpm.Model().LoadMat("green")
 	} else {
-		mm.cpm.Role().SetMaterial("blue")
+		mm.cpm.Model().LoadMat("blue")
 	}
 }
 
 // update adjusts the minimap according to the players new position.
-func (mm *minimap) update(sc vu.Scene, sentries []*sentinel) {
+func (mm *minimap) update(v vu.View, sentries []*sentinel) {
 	scale := mm.scale
-	x, y, z := sc.Cam().Location()
+	x, y, z := v.Cam().Location()
 	x, y, z = x*scale, y*scale, z*scale
 	mm.cam.SetLocation(x, y, z)
 	mm.setPlayerLocation(x, y, z)
-	mm.setPlayerRotation(sc.Cam().Rotation())
+	mm.setPlayerRotation(v.Cam().Lookxz())
 	mm.setCenterLocation(x, y, z)
 	mm.setSentryLocations(sentries)
 }
@@ -475,14 +471,14 @@ func (mm *minimap) setPlayerLocation(x, y, z float64) {
 	mm.ppm.SetLocation(x, y, z)
 	mm.bg.SetLocation(x, y, z)
 }
-func (mm *minimap) setPlayerRotation(x, y, z, w float64) { mm.ppm.SetRotation(x, y, z, w) }
+func (mm *minimap) setPlayerRotation(dir *lin.Q) { mm.ppm.SetRotation(dir) }
 
 // set the position of the maze center marker.
 func (mm *minimap) setCenterLocation(x, y, z float64) {
-	toc := &lin.V3{x - mm.cx, y, z - mm.cy} // vector from player to center
-	dtoc := toc.Len()                       // distance to center
-	mm.cpm.SetLocation(mm.cx, 0, mm.cy)     // set marker at center...
-	if dtoc > float64(mm.radius) {          // ... unless the distance is to great
+	toc := &lin.V3{X: x - mm.cx, Y: y, Z: z - mm.cy} // vector from player to center
+	dtoc := toc.Len()                                // distance to center
+	mm.cpm.SetLocation(mm.cx, 0, mm.cy)              // set marker at center...
+	if dtoc > float64(mm.radius) {                   // ... unless the distance is to great
 		toc.Unit().Scale(toc, float64(mm.radius))
 		mm.cpm.SetLocation(x-toc.X, y, z-toc.Z)
 	}

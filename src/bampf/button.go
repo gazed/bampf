@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -15,34 +15,34 @@ type button struct {
 	id        string      // Button unique name.
 	eventId   int         // game event identifier.
 	eventData interface{} // game event data.
-	icon      vu.Part     // Button image.
-	hilite    vu.Part     // Hover overlay.
-	banner    vu.Part     // Label for the action associated with the button.
+	icon      vu.Pov      // Button image.
+	hilite    vu.Pov      // Hover overlay.
+	banner    vu.Pov      // Label for the action associated with the button.
 	cx, cy    float64     // Button center location.
-	model     vu.Part     // Holds button 3D model. Used for transforms.
+	model     vu.Pov      // Holds button 3D model. Used for transforms.
 }
 
 // newButton creates a button. Buttons are initialized with a size and repositioned later.
-//   part   is the parent model.
+//   root   is the parent transform.
 //   size   is both the width and height.
 //   icon   is the (already loaded) texture image.
 //   action is the action to perform when the button is pressed.
-func newButton(parent vu.Part, size int, icon string, eventId int, eventData interface{}) *button {
+func newButton(root vu.Pov, size int, icon string, eventId int, eventData interface{}) *button {
 	btn := &button{}
-	btn.model = parent.AddPart()
+	btn.model = root.NewPov()
 	btn.eventId = eventId
 	btn.eventData = eventData
 	btn.w, btn.h = size, size
 
 	// create the button icon.
 	btn.id = icon
-	btn.icon = btn.model.AddPart().SetScale(float64(btn.w/2), float64(btn.h/2), 1)
-	btn.icon.SetRole("uv").SetMesh("icon").AddTex(icon).SetMaterial("half")
+	btn.icon = btn.model.NewPov().SetScale(float64(btn.w/2), float64(btn.h/2), 1)
+	btn.icon.NewModel("uv").LoadMesh("icon").AddTex(icon).SetAlpha(0.5)
 
 	// create a hilite that is only shown on mouse over.
-	btn.hilite = btn.model.AddPart().SetScale(float64(btn.w/2.0), float64(btn.h/2.0), 1)
+	btn.hilite = btn.model.NewPov().SetScale(float64(btn.w/2.0), float64(btn.h/2.0), 1)
 	btn.hilite.SetVisible(false)
-	btn.hilite.SetRole("flat").SetMesh("square").SetMaterial("tblue")
+	btn.hilite.NewModel("alpha").LoadMesh("square").LoadMat("tblue")
 	return btn
 }
 
@@ -53,7 +53,7 @@ func (b *button) setVisible(visible bool) {
 
 // setIcon changes the buttons icon.
 func (b *button) setIcon(icon string) {
-	b.icon.Role().UseTex(icon, 0)
+	b.icon.Model().SetTex(0, icon)
 }
 
 // clicked returns true if the button was clicked.
@@ -63,17 +63,16 @@ func (b *button) clicked(mx, my int) bool {
 
 // label adds a banner to a button or updates the banner if there is
 // an existing banner.
-func (b *button) label(part vu.Part, text string) {
+func (b *button) label(part vu.Pov, text string) {
 	texture := "weblySleek22Black"
 	if b.banner == nil {
 		if text == "" {
 			text = "Sp"
 		}
-		b.banner = part.AddPart()
-		b.banner.SetLocation(float64(b.x), float64(b.y), 0)
-		b.banner.SetRole("uv").AddTex(texture).SetFont("weblySleek22")
+		b.banner = part.NewPov().SetLocation(float64(b.x), float64(b.y), 0)
+		b.banner.NewModel("uv").AddTex(texture).LoadFont("weblySleek22")
 	}
-	b.banner.Role().SetPhrase(text)
+	b.banner.Model().SetPhrase(text)
 }
 
 // position specifies the new center location for the button. This ensures the

@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -19,18 +19,18 @@ type config struct {
 	area                     // Options fills up the full screen.
 	keys           []string  // Rebindable keys.
 	keysRebound    bool      // True if keys were changed.
-	scene          vu.Scene  // Scene created at init.
+	view           vu.View   // Scene created at init.
 	mp             *bampf    // Main program.
-	eng            vu.Engine // 3D engine.
-	bg             vu.Part   // Gray out the screen when options are up.
+	root           vu.Pov    // Top of transform hierarchy for this screen.
+	bg             vu.Pov    // Gray out the screen when options are up.
+	buttonGroup    vu.Pov    // Part to group buttons.
 	buttons        []*button // Option buttons.
 	buttonSize     int       // Width and height of each button.
-	buttonGroup    vu.Part   // Part to group buttons.
 	restart        *button   // Quit level button.
 	back           *button   // Back to game button.
 	info           *button   // Info/credits button.
 	mute           *button   // Mute toggle.
-	creditList     []vu.Part // The info model.
+	creditList     []vu.Pov  // The info model.
 	exitTransition int       // Transition to use when exiting config.
 }
 
@@ -42,10 +42,10 @@ func (c *config) activate(state int) {
 	switch state {
 	case screenActive:
 		c.keysRebound = false
-		c.scene.SetVisible(true)
-		c.mp.eng.SetLastScene(c.scene)
+		c.view.SetVisible(true)
+		c.view.SetLast(1) // sort bucket is OVERLAY + 1
 	case screenDeactive:
-		c.scene.SetVisible(false)
+		c.view.SetVisible(false)
 	default:
 		logf("config state error")
 	}
@@ -115,19 +115,17 @@ func (c *config) processEvents(eventq *list.List) (transition int) {
 
 // newConfigScreen creates the options screen. It needs the key bindings
 // for user actions.
-func newConfigScreen(mp *bampf, keys []string) *config {
+func newConfigScreen(mp *bampf, keys []string, ww, wh int) *config {
 	c := &config{}
 	c.mp = mp
-	c.eng = mp.eng
 	c.buttonSize = 64
-	c.scene = c.eng.AddScene(vu.VO)
-	c.scene.Set2D()
-	_, _, w, h := c.eng.Size()
-	c.handleResize(w, h)
-	c.bg = c.scene.AddPart()
-	c.bg.SetLocation(float64(c.cx), float64(c.cy), 0)
+	c.root = mp.eng.Root().NewPov()
+	c.view = c.root.NewView()
+	c.view.SetUI()
+	c.handleResize(ww, wh)
+	c.bg = c.root.NewPov().SetLocation(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
-	c.bg.SetRole("flat").SetMesh("square").SetMaterial("tblack")
+	c.bg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
 	c.keys = []string{ // rebindable key defaults.
 		"W", // forwards
 		"S", // backwards
@@ -143,7 +141,7 @@ func newConfigScreen(mp *bampf, keys []string) *config {
 	// ensure that the game buttons always appear in the same location
 	// by mapping reaction ids to button positions.
 	c.buttons = make([]*button, len(c.keys))
-	c.buttonGroup = c.scene.AddPart()
+	c.buttonGroup = c.root.NewPov()
 	c.createButtons()
 
 	// create the non-mappable buttons.
@@ -159,14 +157,14 @@ func newConfigScreen(mp *bampf, keys []string) *config {
 	c.back.position(float64(c.w-20-c.back.w/2), 20) // bottom right corner
 	c.restart = newButton(c.buttonGroup, sz/2, "quit", quitLevel, nil)
 	c.restart.position(float64(c.cx), 20) // bottom center of screen.
-	c.scene.SetVisible(false)
+	c.view.SetVisible(false)
 	return c
 }
 
 // handleResize repositions the visible elements when the user resizes the screen.
 func (c *config) handleResize(width, height int) {
 	c.x, c.y, c.w, c.h = 0, 0, width, height
-	c.scene.Cam().SetOrthographic(0, float64(c.w), 0, float64(c.h), 0, 10)
+	c.view.Cam().SetOrthographic(0, float64(c.w), 0, float64(c.h), 0, 10)
 	c.cx, c.cy = c.center()
 	if c.bg != nil {
 		c.bg.SetScale(float64(c.w), float64(c.h), 1)
@@ -275,14 +273,12 @@ func (c *config) rollCredits() {
 	info := "Bampf " + version
 	credits = append(credits, info)
 	if c.creditList == nil {
-		c.creditList = []vu.Part{}
+		c.creditList = []vu.Pov{}
 		tex := "weblySleek16White"
 		height := float64(45)
 		for _, credit := range credits {
-			banner := c.scene.AddPart()
-			banner.SetLocation(20, height, 0)
-			banner.SetVisible(true)
-			banner.SetRole("uv").AddTex(tex).SetFont("weblySleek16").SetPhrase(credit)
+			banner := c.root.NewPov().SetLocation(20, height, 0)
+			banner.NewModel("uv").AddTex(tex).LoadFont("weblySleek16").SetPhrase(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}

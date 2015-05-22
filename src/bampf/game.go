@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -15,16 +15,16 @@ import (
 // and the heads up display (hud).
 type game struct {
 	mp        *bampf          // Main program.
-	eng       vu.Engine       // Game engine.
 	levels    map[int]*level  // Game levels.
 	cl        *level          // Current level.
 	dt        float64         // Delta time updated per game tick.
 	keys      []string        // Key bindings.
-	lens      lens            // Dictates how the camera moves.
-	w, h      int             // Window size.
+	lens      *cam            // Dictates how the camera moves.
+	ww, wh    int             // Window size.
 	mxp, myp  int             // Previous mouse locations.
 	procDebug func(*vu.Input) // Debugging commands in debug loads.
 	evolving  bool            // True when player is moving between levels.
+	dir       *lin.Q          // Movement direction.
 
 	// Debug variables
 	fly  bool     // Debug flying ability switch, see game_debug.go
@@ -43,16 +43,16 @@ func (g *game) resize(width, height int) { g.handleResize(width, height) }
 func (g *game) activate(state int) {
 	switch state {
 	case screenActive:
-		g.eng.ShowCursor(false)
+		g.mp.eng.ShowCursor(false)
 		g.cl.setVisible(true)
 		g.setKeys(g.keys)
 		g.evolving = false
 	case screenDeactive:
-		g.eng.ShowCursor(true)
+		g.mp.eng.ShowCursor(true)
 		g.cl.setVisible(false)
 		g.evolving = false
 	case screenPaused:
-		g.eng.ShowCursor(true)
+		g.mp.eng.ShowCursor(true)
 	case screenEvolving:
 		g.evolving = true
 	}
@@ -68,8 +68,9 @@ func (g *game) processInput(in *vu.Input, eventq *list.List) {
 	// Do the evolve check before processing any other input.
 	g.spinView(in.Mx, in.My, g.dt)
 	if !g.evolving {
-		g.cl.update()         // level per-tick updates.
-		g.evolveCheck(eventq) // kick off any necessary level transitions.
+		g.lens.update(g.cl.cam) // smooth camera.
+		g.cl.update()           // level per-tick updates.
+		g.evolveCheck(eventq)   // kick off any necessary level transitions.
 	}
 	g.centerMouse(in.Mx, in.My) // keep centering the mouse.
 
@@ -133,6 +134,7 @@ func (g *game) processEvents(eventq *list.List) (transition int) {
 		case cloak:
 			g.cl.cloak()
 		case teleport:
+			g.lens.reset(g.cl.cam)
 			g.cl.teleport()
 		case keysRebound:
 			if keys, ok := event.data.([]string); ok {
@@ -154,9 +156,8 @@ func (g *game) processEvents(eventq *list.List) (transition int) {
 func newGameScreen(mp *bampf) (scr *game) {
 	g := &game{}
 	g.mp = mp
-	g.eng = mp.eng
-	g.lens = &fps{}
-	g.w, g.h = mp.wx, mp.wy
+	g.lens = &cam{}
+	g.ww, g.wh = mp.ww, mp.wh
 	g.run = 10  // shared constant
 	g.spin = 25 // shared constant
 	g.vr = 25   // shared constant
@@ -178,7 +179,7 @@ func (g *game) setDebugProcessor(gi interface{}) func(*vu.Input) {
 
 // handleResize affects all levels, not just the current one.
 func (g *game) handleResize(width, height int) {
-	g.w, g.h = width, height
+	g.ww, g.wh = width, height
 	for _, stage := range g.levels {
 		stage.resize(width, height)
 	}
@@ -188,28 +189,29 @@ func (g *game) handleResize(width, height int) {
 // from the previous call.
 func (g *game) spinView(mx, my int, dt float64) {
 	xdiff, ydiff := float64(mx-g.mxp), float64(my-g.myp)
-	g.lens.look(g.cl.scene, g.spin, dt, xdiff, ydiff)
+	g.lens.look(g.spin, dt, xdiff, ydiff)
 	g.mxp, g.myp = mx, my
 }
 
 // centerMouse pops the mouse back to the center of the window, but only
 // when the mouse starts to stray too far away.
 func (g *game) centerMouse(mx, my int) {
-	cx, cy := g.w/2, g.h/2
+	cx, cy := g.ww/2, g.wh/2
 	if math.Abs(float64(cx-mx)) > 200 || math.Abs(float64(cy-my)) > 200 {
-		g.eng.SetCursorAt(g.w/2, g.h/2)
+		g.mp.eng.SetCursorAt(g.ww/2, g.wh/2)
+		g.mxp, g.myp = cx, cy
 	}
 }
 
 // limitWandering puts a limit on how far the player can get from the center
 // of the level. This allows the player to feel like they are traveling away
 // forever, but they can then return to the center in very little time.
-func (g *game) limitWandering(scene vu.Scene, down int) {
-	maxd := g.vr * 3                    // max allowed distance from center
-	cx, _, cz := g.cl.center.Location() // center location
-	x, y, z := g.cl.body.Location()     // player location
-	toc := &lin.V3{x - cx, y, z - cz}   // vector to center
-	dtoc := toc.Len()                   // distance to center
+func (g *game) limitWandering(v vu.View, down int) {
+	maxd := g.vr * 3                           // max allowed distance from center
+	cx, _, cz := g.cl.center.Location()        // center location
+	x, y, z := g.cl.body.Location()            // player location
+	toc := &lin.V3{X: x - cx, Y: y, Z: z - cz} // vector to center
+	dtoc := toc.Len()                          // distance to center
 	if dtoc > maxd {
 
 		// stop moving forward and move a bit back to center.
@@ -229,20 +231,20 @@ func (g *game) limitWandering(scene vu.Scene, down int) {
 
 // Player movement handlers.
 func (g *game) goForward(dt float64, down int) {
-	g.lens.forward(g.cl.body, dt, g.run)
-	g.limitWandering(g.cl.scene, down)
+	g.lens.forward(g.cl.body, dt, g.run, g.dir)
+	g.limitWandering(g.cl.view, down)
 }
 func (g *game) goBack(dt float64, down int) {
-	g.lens.back(g.cl.body, dt, g.run)
-	g.limitWandering(g.cl.scene, down)
+	g.lens.back(g.cl.body, dt, g.run, g.dir)
+	g.limitWandering(g.cl.view, down)
 }
 func (g *game) goLeft(dt float64, down int) {
-	g.lens.left(g.cl.body, dt, g.run)
-	g.limitWandering(g.cl.scene, down)
+	g.lens.left(g.cl.body, dt, g.run, g.dir)
+	g.limitWandering(g.cl.view, down)
 }
 func (g *game) goRight(dt float64, down int) {
-	g.lens.right(g.cl.body, dt, g.run)
-	g.limitWandering(g.cl.scene, down)
+	g.lens.right(g.cl.body, dt, g.run, g.dir)
+	g.limitWandering(g.cl.view, down)
 }
 
 // evolveCheck looks for a player at full health that is at the center
@@ -295,10 +297,14 @@ func (g *game) setLevel(lvl int) {
 	}
 	if _, ok := g.levels[lvl]; !ok {
 		g.levels[lvl] = newLevel(g, lvl)
+	} else {
+		g.levels[lvl].player.reset()
 	}
 	g.cl = g.levels[lvl]
+	g.lens.reset(g.cl.cam)
 	g.cl.activate(g)
 	g.cl.updateKeys(g.keys)
+	g.dir = g.cl.cam.Lookxz()
 }
 
 // newStartGameAnimation descends to the initial level from
@@ -326,8 +332,9 @@ func (g *game) newEvolveAnimation(dir int) animation {
 func (g *game) switchLevel(fo, fi *fadeLevelAnimation) {
 	g.cl.setBackgroundColour(1)
 	g.cl.center.SetScale(1, 1, 1)
-	g.cl.center.Role().UseTex("drop1", 0)
-	g.cl.center.Role().SetUniform("spin", 1.0)
+	m := g.cl.center.Model()
+	m.SetTex(0, "drop1")
+	m.SetUniform("spin", 1.0)
 
 	// switch to the new level.
 	g.setLevel(g.cl.num + fo.dir)
@@ -360,36 +367,34 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 	case 0:
 		g := f.g
 		g.evolving = true
-		g.cl.player.reset()
-		g.cl.body.RemBody()
-		g.lens = &fly{}
+		g.cl.body.Dispose(vu.BODY)
 		x, z := 4.0, 10.0 // standard starting spot.
 		if f.out {
 
 			// fading out:
 			// start level drop below if dir == 1
-			//   cam tilt from 0 to -75
+			//   cam tilt from 0 to 75
 			//   location goes down from 0 to -g.vr.
 			// start level and rise if dir == -1
-			//   cam tilt from 0 to 75
+			//   cam tilt from 0 to -75
 			//   location goes up from 0 to g.vr.
-			f.tiltA, f.tiltB = 0.0, float64(-75*f.dir)
+			f.tiltA, f.tiltB = 0.0, float64(75*f.dir)
 			f.distA, f.distB = 0.0, float64(f.dir)*-g.vr
 			x, _, z = g.cl.cam.Location() // start from player location.
 		} else {
 
 			// fading in:
 			// start high and drop to level if dir == 1
-			//   cam tilt from 75 to 0
+			//   cam tilt from -75 to 0
 			//   location goes from g.vr down to 0.
 			// start low and rise to level if dir == -1
-			//   cam tilt from -75 to 0
+			//   cam tilt from 75 to 0
 			//   location goes from -g.vr down to 0.
-			f.tiltA, f.tiltB = float64(75*f.dir), 0.0
+			f.tiltA, f.tiltB = float64(-75*f.dir), 0.0
 			f.distA, f.distB = float64(f.dir)*g.vr, 0.0
 		}
 
-		g.cl.cam.SetTilt(f.tiltA)
+		g.lens.pitch = f.tiltA
 		g.cl.cam.SetLocation(x, f.distA, z)
 		f.colr = (float32(1) - g.cl.colour) / float32(f.ticks)
 		g.cl.setVisible(true)
@@ -401,9 +406,10 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 		g.cl.colour += f.colr
 		g.cl.setBackgroundColour(g.cl.colour)
 		move := (f.distB - f.distA) / float64(f.ticks)
-		g.cl.cam.Move(0, move, 0)
+		g.cl.cam.Move(0, move, 0, lin.QI)
 		tilt := (f.tiltB - f.tiltA) / float64(f.ticks) * 2
-		g.lens.lookUpDown(g.cl.scene, -tilt, g.spin, g.dt)
+		g.lens.pitch = g.lens.updatePitch(g.lens.pitch, tilt, g.spin, g.dt)
+		g.cl.cam.SetPitch(g.lens.pitch)
 		if f.tickCnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -419,14 +425,16 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 // a safe and stable location.
 func (f *fadeLevelAnimation) Wrap() {
 	g := f.g
-	g.lens = &fps{}
+	g.lens = &cam{}
 	g.cl.setHudVisible(true)
-	g.cl.body.SetBody(vu.NewSphere(0.25), 1, 0)
+	g.cl.body.NewBody(vu.NewSphere(0.25))
+	g.cl.body.SetSolid(1, 0)
 	x, _, z := g.cl.cam.Location()
 	g.cl.cam.SetLocation(x, 0.5, z)
-	g.cl.cam.SetTilt(0)
+	g.lens.pitch = 0
+	g.cl.cam.SetPitch(g.lens.pitch)
 	g.cl.body.SetLocation(x, 0.5, z)
-	g.cl.body.SetRotation(0, 0, 0, 1)
+	g.cl.body.SetRotation(lin.QI)
 
 	// set the new game state if appropriate.
 	if f.gameState == screenDeactive || f.gameState == screenActive {
@@ -456,12 +464,13 @@ var gameCellGain = []int{1, 2, 4, 8, 8}
 // with a sentinel. These are multiples of the corresponding cell gains.
 var gameCellLoss = []int{1, 12, 24, 48, 64}
 
-// lastSpot is used during debug to return the player to their previous position
-// when fly mode is turned off.
+// lastSpot is used during debug to return the player to their previous
+// position when debug fly mode is turned off.
 type lastSpot struct {
-	lx, ly, lz     float64 // location
-	dx, dy, dz, dw float64 // direction
-	tilt           float64 // up/down.
+	lx, ly, lz float64 // location
+	// dx, dy, dz, dw float64 // direction
+	pitch float64 // up/down.
+	yaw   float64 // spin.
 }
 
 // calculate a unique id for an x, y coordinate.

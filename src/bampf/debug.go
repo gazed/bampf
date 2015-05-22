@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 // +build debug
@@ -27,10 +27,6 @@ func (g *game) processDebugInput(in *vu.Input) {
 		switch {
 		case press == "F" && down == 1:
 			g.toggleFly() // Turn flying on or off.
-		case press == "X":
-			g.lens.up(g.cl.body, in.Dt, g.run) // Fly up.
-		case press == "Z":
-			g.lens.down(g.cl.body, in.Dt, g.run) // Fly down.
 		case press == "B":
 			g.cl.player.detach() // Lose cores.
 		case press == "H":
@@ -39,10 +35,6 @@ func (g *game) processDebugInput(in *vu.Input) {
 			g.cl.debugCloak() // Gain longer cloak.
 		case press == "O" && down == 1:
 			g.mp.state(finishGame) // Jump to the end game animation.
-		case press == "KP+":
-			g.cl.alterFov(+1) // Increase fov
-		case press == "KP-":
-			g.cl.alterFov(-1) // Decrease fov
 		}
 	}
 }
@@ -52,17 +44,20 @@ func (g *game) toggleFly() {
 	g.fly = !g.fly
 	if g.fly {
 		g.last.lx, g.last.ly, g.last.lz = g.cl.cam.Location()
-		g.last.dx, g.last.dy, g.last.dz, g.last.dw = g.cl.cam.Rotation()
-		g.last.tilt = g.cl.cam.Tilt()
-		g.cl.body.RemBody()
-		g.lens = &fly{}
+		g.last.pitch = g.cl.cam.Pitch()
+		g.last.yaw = g.cl.cam.Yaw()
+		g.cl.body.Dispose(vu.BODY)
+		g.dir = g.cl.cam.Lookat()
 	} else {
+		g.lens.pitch = g.last.pitch
+		g.lens.yaw = g.last.yaw
+		g.cl.cam.SetPitch(g.last.pitch)
+		g.cl.cam.SetYaw(g.last.yaw)
 		g.cl.cam.SetLocation(g.last.lx, g.last.ly, g.last.lz)
-		g.cl.cam.SetRotation(g.last.dx, g.last.dy, g.last.dz, g.last.dw)
-		g.cl.cam.SetTilt(g.last.tilt)
 		g.cl.body.SetLocation(g.last.lx, g.last.ly, g.last.lz)
-		g.cl.body.SetRotation(g.last.dx, g.last.dy, g.last.dz, g.last.dw)
-		g.cl.body.SetBody(vu.NewSphere(0.25), 1, 0)
-		g.lens = &fps{}
+		g.cl.body.SetRotation(g.cl.cam.Lookat())
+		g.cl.body.NewBody(vu.NewSphere(0.25))
+		g.cl.body.SetSolid(1, 0)
+		g.dir = g.cl.cam.Lookxz()
 	}
 }
