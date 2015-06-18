@@ -1,4 +1,4 @@
-// Copyright © 2013-2014 Galvanized Logic Inc.
+// Copyright © 2013-2015 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -15,10 +15,10 @@ import (
 // game session and the next. Saver needs to be public and visible for
 // the encoding package.
 type Saver struct {
-	File       string   // Save file name.
-	Kbinds     []string // Key bindings.
-	X, Y, W, H int      // Window location.
-	Mute       bool     // True if the game is muted.
+	File       string // Save file name.
+	Kbinds     []int  // Key bindings.
+	X, Y, W, H int    // Window location.
+	Mute       bool   // True if the game is muted.
 }
 
 // newSaver creates default persistent application state. The directory
@@ -28,7 +28,7 @@ type Saver struct {
 //    lin  : FUTURE
 func newSaver() *Saver {
 	s := &Saver{}
-	s.Kbinds = []string{}
+	s.Kbinds = []int{}
 	dir := s.directoryLocation()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		dir = ""
@@ -39,7 +39,7 @@ func newSaver() *Saver {
 
 // persistBindings saves the new keybindings, while preserving the other
 // information.
-func (s *Saver) persistBindings(keys []string) {
+func (s *Saver) persistBindings(keys []int) {
 	s.restore()
 	s.Kbinds = keys
 	s.persist()

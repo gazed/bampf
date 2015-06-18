@@ -47,11 +47,11 @@ func (l *launch) activate(state int) {
 func (l *launch) processInput(in *vu.Input, eventq *list.List) {
 	for press, down := range in.Down {
 		switch {
-		case press == "Esc" && down == 1 && !l.evolving:
+		case press == vu.K_Esc && down == 1 && !l.evolving:
 			publish(eventq, toggleOptions, nil)
-		case press == "Sp" && down == 1:
+		case press == vu.K_Space && down == 1:
 			publish(eventq, skipAnim, nil)
-		case press == "Lm" && down == 1:
+		case press == vu.K_Lm && down == 1:
 			for _, btn := range l.buttons {
 				if btn.clicked(in.Mx, in.My) {
 					publish(eventq, btn.eventId, btn.eventData)

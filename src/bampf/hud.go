@@ -198,7 +198,7 @@ func newXpbar(root vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// add the xp bar text.
 	xp.hb = root.NewPov()
-	m := xp.hb.NewModel("uv").AddTex("weblySleek22White").LoadFont("weblySleek22")
+	m := xp.hb.NewModel("uv").AddTex("lucidiaSu22White").LoadFont("lucidiaSu22")
 	xp.hbw = m.SetPhrase("0").PhraseWidth()
 
 	// teleport energy background and foreground bars.
@@ -209,7 +209,7 @@ func newXpbar(root vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// the teleport bar text.
 	xp.tk = root.NewPov()
-	m = xp.tk.NewModel("uv").AddTex("weblySleek16White").LoadFont("weblySleek16")
+	m = xp.tk.NewModel("uv").AddTex("lucidiaSu18White").LoadFont("lucidiaSu18")
 	xp.tkw = m.SetPhrase("0").PhraseWidth()
 
 	// cloak energy background and foreground bars.
@@ -220,7 +220,7 @@ func newXpbar(root vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// the cloak bar text.
 	xp.ck = root.NewPov()
-	m = xp.ck.NewModel("uv").AddTex("weblySleek16White").LoadFont("weblySleek16")
+	m = xp.ck.NewModel("uv").AddTex("lucidiaSu18White").LoadFont("lucidiaSu18")
 	xp.ckw = m.SetPhrase("0").PhraseWidth()
 	xp.resize(screenWidth, screenHeight)
 	return xp
@@ -306,10 +306,14 @@ func (xp *xpbar) setLevel(lvl *level) {
 
 // updateKeys needs to be called on startup and whenever the displayed key
 // mappings are changed.
-func (xp *xpbar) updateKeys(teleportKey, cloakKey string) {
+func (xp *xpbar) updateKeys(teleportKey, cloakKey int) {
 	if xp.tk != nil && xp.ck != nil {
-		xp.tk.Model().SetPhrase(teleportKey)
-		xp.ck.Model().SetPhrase(cloakKey)
+		if tsym := vu.Keysym(teleportKey); tsym > 0 {
+			xp.tk.Model().SetPhrase(string(tsym))
+		}
+		if csym := vu.Keysym(cloakKey); csym > 0 {
+			xp.ck.Model().SetPhrase(string(csym))
+		}
 	}
 }
 

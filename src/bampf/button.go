@@ -63,16 +63,18 @@ func (b *button) clicked(mx, my int) bool {
 
 // label adds a banner to a button or updates the banner if there is
 // an existing banner.
-func (b *button) label(part vu.Pov, text string) {
-	texture := "weblySleek22Black"
-	if b.banner == nil {
-		if text == "" {
-			text = "Sp"
+func (b *button) label(part vu.Pov, keyCode int) {
+	if keysym := vu.Keysym(keyCode); keysym > 0 {
+		texture := "lucidiaSu22Black"
+		if b.banner == nil {
+			b.banner = part.NewPov().SetLocation(float64(b.x), float64(b.y), 0)
+			b.banner.NewModel("uv").AddTex(texture).LoadFont("lucidiaSu22")
 		}
-		b.banner = part.NewPov().SetLocation(float64(b.x), float64(b.y), 0)
-		b.banner.NewModel("uv").AddTex(texture).LoadFont("weblySleek22")
+		if keyCode == 0 {
+			keyCode = vu.K_Space
+		}
+		b.banner.Model().SetPhrase(string(keysym))
 	}
-	b.banner.Model().SetPhrase(text)
 }
 
 // position specifies the new center location for the button. This ensures the

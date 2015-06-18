@@ -17,7 +17,7 @@ import (
 //     end screen   : allows the user to map keys or return to the start screen.
 type config struct {
 	area                     // Options fills up the full screen.
-	keys           []string  // Rebindable keys.
+	keys           []int     // Rebindable keys.
 	keysRebound    bool      // True if keys were changed.
 	view           vu.View   // Scene created at init.
 	mp             *bampf    // Main program.
@@ -56,11 +56,11 @@ func (c *config) processInput(in *vu.Input, eventq *list.List) {
 	overIndex := c.hover(in.Mx, in.My) // per tick processing.
 	for press, down := range in.Down {
 		switch {
-		case press == "Esc" && down == 1:
+		case press == vu.K_Esc && down == 1:
 			publish(eventq, toggleOptions, nil)
 		case overIndex >= 0 && down == 1:
 			publish(eventq, rebindKey, rebindKeyEvent{index: overIndex, key: press})
-		case press == "Lm" && down == 1:
+		case press == vu.K_Lm && down == 1:
 			for _, btn := range c.buttons {
 				if btn.clicked(in.Mx, in.My) {
 					publish(eventq, btn.eventId, btn.eventData)
@@ -115,7 +115,7 @@ func (c *config) processEvents(eventq *list.List) (transition int) {
 
 // newConfigScreen creates the options screen. It needs the key bindings
 // for user actions.
-func newConfigScreen(mp *bampf, keys []string, ww, wh int) *config {
+func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c := &config{}
 	c.mp = mp
 	c.buttonSize = 64
@@ -126,13 +126,13 @@ func newConfigScreen(mp *bampf, keys []string, ww, wh int) *config {
 	c.bg = c.root.NewPov().SetLocation(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
 	c.bg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
-	c.keys = []string{ // rebindable key defaults.
-		"W", // forwards
-		"S", // backwards
-		"A", // left
-		"D", // right
-		"C", // cloak
-		"T", // teleport
+	c.keys = []int{ // rebindable key defaults.
+		vu.K_W, // forwards
+		vu.K_S, // backwards
+		vu.K_A, // left
+		vu.K_D, // right
+		vu.K_C, // cloak
+		vu.K_T, // teleport
 	}
 	if len(keys) == len(c.keys) { // override with saved keys.
 		c.keys = keys
@@ -228,9 +228,9 @@ func (c *config) setExitTransition(transition int) {
 
 // rebindKey changes the key for a given reaction. If the newKey is already used,
 // then it's reaction is bound to the oldKey. Otherwise the oldKey is dropped.
-func (c *config) rebindKey(index int, key string) {
-	if key != "Esc" && key != "Sp" && key != "Cmd" && key != "Ctl" &&
-		key != "Fn" && key != "Sh" && key != "Alt" {
+func (c *config) rebindKey(index int, key int) {
+	if key != vu.K_Esc && key != vu.K_Space && key != vu.K_Cmd && key != vu.K_Ctl &&
+		key != vu.K_Fn && key != vu.K_Shift && key != vu.K_Alt {
 
 		// check if the key is already used and swap if necessary.
 		swap := -1
@@ -267,18 +267,18 @@ func (c *config) rollCredits() {
 		"@galvanizedlogic.com",
 		"rust",
 		"hymn",
-		"jewl",
+		"jazz",
 		"soap",
 	}
 	info := "Bampf " + version
 	credits = append(credits, info)
 	if c.creditList == nil {
 		c.creditList = []vu.Pov{}
-		tex := "weblySleek16White"
+		tex := "lucidiaSu18White"
 		height := float64(45)
 		for _, credit := range credits {
 			banner := c.root.NewPov().SetLocation(20, height, 0)
-			banner.NewModel("uv").AddTex(tex).LoadFont("weblySleek16").SetPhrase(credit)
+			banner.NewModel("uv").AddTex(tex).LoadFont("lucidiaSu18").SetPhrase(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}

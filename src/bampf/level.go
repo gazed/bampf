@@ -133,7 +133,7 @@ func (lvl *level) update() {
 }
 
 // updateKeys ensures the displayed action keys and labels are correct.
-func (lvl *level) updateKeys(keys []string) {
+func (lvl *level) updateKeys(keys []int) {
 	if len(keys) > 5 {
 		cloakKey, teleportKey := keys[4], keys[5]
 		lvl.hd.xp.updateKeys(teleportKey, cloakKey)

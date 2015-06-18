@@ -53,7 +53,7 @@ func (e *end) activate(state int) {
 func (e *end) processInput(in *vu.Input, eventq *list.List) {
 	for press, down := range in.Down {
 		switch {
-		case press == "Esc" && down == 1 && !e.evolving:
+		case press == vu.K_Esc && down == 1 && !e.evolving:
 			publish(eventq, toggleOptions, nil)
 		}
 	}

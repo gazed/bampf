@@ -18,7 +18,7 @@ type game struct {
 	levels    map[int]*level  // Game levels.
 	cl        *level          // Current level.
 	dt        float64         // Delta time updated per game tick.
-	keys      []string        // Key bindings.
+	keys      []int           // Key bindings.
 	lens      *cam            // Dictates how the camera moves.
 	ww, wh    int             // Window size.
 	mxp, myp  int             // Previous mouse locations.
@@ -78,9 +78,9 @@ func (g *game) processInput(in *vu.Input, eventq *list.List) {
 	g.dt = in.Dt
 	for press, down := range in.Down {
 		switch {
-		case press == "Esc" && down == 1 && !g.evolving:
+		case press == vu.K_Esc && down == 1 && !g.evolving:
 			publish(eventq, toggleOptions, nil)
-		case press == "Sp" && down == 1:
+		case press == vu.K_Space && down == 1:
 			publish(eventq, skipAnim, nil)
 		case press == g.keys[0] && !g.evolving: // rebindable keys from here on.
 			publish(eventq, goForward, down)
@@ -137,7 +137,7 @@ func (g *game) processEvents(eventq *list.List) (transition int) {
 			g.lens.reset(g.cl.cam)
 			g.cl.teleport()
 		case keysRebound:
-			if keys, ok := event.data.([]string); ok {
+			if keys, ok := event.data.([]int); ok {
 				g.setKeys(keys)
 			} else {
 				logf("game.processEvents: did not receive keysRebound keys")
@@ -282,7 +282,7 @@ func (g *game) healthUpdated(health, warn, high int) {
 }
 
 // setKeys sets the rebindable keys.
-func (g *game) setKeys(keys []string) {
+func (g *game) setKeys(keys []int) {
 	g.keys = keys
 	if g.cl != nil {
 		g.cl.updateKeys(g.keys)

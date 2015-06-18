@@ -65,7 +65,7 @@ type bampf struct {
 	ww, wh      int        // Application window size.
 	ani         *animator  // Handles short animations.
 	launchLevel int        // Choosen by the user on the launch screen.
-	keys        []string   // Restored key bindings.
+	keys        []int      // Restored key bindings.
 }
 
 // Game state transition constants are passed to game state methods which
@@ -403,7 +403,7 @@ type event struct {
 // rebindKeyEvent is the data for rebindKey events.
 type rebindKeyEvent struct {
 	index int
-	key   string
+	key   int
 }
 
 // publish adds the event to the end of the game event queue.
