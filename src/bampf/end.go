@@ -15,8 +15,7 @@ import (
 // difficulty settings.
 type end struct {
 	root     vu.Pov
-	view     vu.View     // Group of model objects for the start screen.
-	cam      vu.Camera   // Quick access to the scene camera.
+	cam      vu.Camera   // Scene camera.
 	bg       vu.Pov      // Background.
 	atom     vu.Pov      // Group the animated atom.
 	e1       vu.Pov      // Up/down electron group.
@@ -36,13 +35,13 @@ func (e *end) resize(width, height int) { e.handleResize(width, height) }
 func (e *end) activate(state int) {
 	switch state {
 	case screenActive:
-		e.view.SetVisible(true)
+		e.root.SetVisible(true)
 		e.evolving = false
 	case screenDeactive:
-		e.view.SetVisible(false)
+		e.root.SetVisible(false)
 		e.evolving = false
 	case screenEvolving:
-		e.view.SetVisible(true)
+		e.root.SetVisible(true)
 		e.evolving = true
 	default:
 		logf("end state error")
@@ -79,9 +78,8 @@ func newEndScreen(mp *bampf, ww, wh int) *end {
 	e.scale = 0.01
 	e.fov = 75
 	e.root = mp.eng.Root().NewPov()
-	e.view = e.root.NewView()
-	e.view.SetVisible(false)
-	e.cam = e.view.Cam()
+	e.root.SetVisible(false)
+	e.cam = e.root.NewCam()
 	e.cam.SetLocation(0, 0, 10)
 	e.cam.SetPerspective(e.fov, float64(ww)/float64(wh), 0.1, 50)
 

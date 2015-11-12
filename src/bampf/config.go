@@ -19,7 +19,7 @@ type config struct {
 	area                     // Options fills up the full screen.
 	keys           []int     // Rebindable keys.
 	keysRebound    bool      // True if keys were changed.
-	view           vu.View   // Scene created at init.
+	cam            vu.Camera // Camera created at init.
 	mp             *bampf    // Main program.
 	root           vu.Pov    // Top of transform hierarchy for this screen.
 	bg             vu.Pov    // Gray out the screen when options are up.
@@ -42,10 +42,10 @@ func (c *config) activate(state int) {
 	switch state {
 	case screenActive:
 		c.keysRebound = false
-		c.view.SetVisible(true)
-		c.view.SetLast(1) // sort bucket is OVERLAY + 1
+		c.root.SetVisible(true)
+		c.cam.SetLast(1) // sort bucket is OVERLAY + 1
 	case screenDeactive:
-		c.view.SetVisible(false)
+		c.root.SetVisible(false)
 	default:
 		logf("config state error")
 	}
@@ -120,8 +120,8 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.mp = mp
 	c.buttonSize = 64
 	c.root = mp.eng.Root().NewPov()
-	c.view = c.root.NewView()
-	c.view.SetUI()
+	c.cam = c.root.NewCam()
+	c.cam.SetUI()
 	c.handleResize(ww, wh)
 	c.bg = c.root.NewPov().SetLocation(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
@@ -157,14 +157,14 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.back.position(float64(c.w-20-c.back.w/2), 20) // bottom right corner
 	c.restart = newButton(c.buttonGroup, sz/2, "quit", quitLevel, nil)
 	c.restart.position(float64(c.cx), 20) // bottom center of screen.
-	c.view.SetVisible(false)
+	c.root.SetVisible(false)
 	return c
 }
 
 // handleResize repositions the visible elements when the user resizes the screen.
 func (c *config) handleResize(width, height int) {
 	c.x, c.y, c.w, c.h = 0, 0, width, height
-	c.view.Cam().SetOrthographic(0, float64(c.w), 0, float64(c.h), 0, 10)
+	c.cam.SetOrthographic(0, float64(c.w), 0, float64(c.h), 0, 10)
 	c.cx, c.cy = c.center()
 	if c.bg != nil {
 		c.bg.SetScale(float64(c.w), float64(c.h), 1)

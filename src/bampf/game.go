@@ -206,7 +206,7 @@ func (g *game) centerMouse(mx, my int) {
 // limitWandering puts a limit on how far the player can get from the center
 // of the level. This allows the player to feel like they are traveling away
 // forever, but they can then return to the center in very little time.
-func (g *game) limitWandering(v vu.View, down int) {
+func (g *game) limitWandering(down int) {
 	maxd := g.vr * 3                           // max allowed distance from center
 	cx, _, cz := g.cl.center.Location()        // center location
 	x, y, z := g.cl.body.Location()            // player location
@@ -232,19 +232,19 @@ func (g *game) limitWandering(v vu.View, down int) {
 // Player movement handlers.
 func (g *game) goForward(dt float64, down int) {
 	g.lens.forward(g.cl.body, dt, g.run, g.dir)
-	g.limitWandering(g.cl.view, down)
+	g.limitWandering(down)
 }
 func (g *game) goBack(dt float64, down int) {
 	g.lens.back(g.cl.body, dt, g.run, g.dir)
-	g.limitWandering(g.cl.view, down)
+	g.limitWandering(down)
 }
 func (g *game) goLeft(dt float64, down int) {
 	g.lens.left(g.cl.body, dt, g.run, g.dir)
-	g.limitWandering(g.cl.view, down)
+	g.limitWandering(down)
 }
 func (g *game) goRight(dt float64, down int) {
 	g.lens.right(g.cl.body, dt, g.run, g.dir)
-	g.limitWandering(g.cl.view, down)
+	g.limitWandering(down)
 }
 
 // evolveCheck looks for a player at full health that is at the center

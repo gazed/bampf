@@ -14,8 +14,7 @@ import (
 type hud struct {
 	area           // Hud fills up the full screen.
 	root vu.Pov    //
-	view vu.View   // Scene graph plus camera and lighting.
-	cam  vu.Camera // Quick access to the scene camera.
+	cam  vu.Camera // Scene camera.
 	pl   *player   // Player model.
 	xp   *xpbar    // Show cores collected and current energy.
 	mm   *minimap  // Show overhead map centered on player.
@@ -28,9 +27,8 @@ type hud struct {
 func newHud(eng vu.Eng, sentryCount, wx, wy, ww, wh int) *hud {
 	hd := &hud{}
 	hd.root = eng.Root().NewPov()
-	hd.view = hd.root.NewView()
-	hd.view.SetUI()
-	hd.cam = hd.view.Cam()
+	hd.cam = hd.root.NewCam()
+	hd.cam.SetUI()
 	hd.setSize(wx, wy, ww, wh)
 
 	// create the HUD parts.
@@ -69,7 +67,7 @@ func (hd *hud) resize(screenWidth, screenHeight int) {
 // setVisible turns the HUD on/off. This is used when transitioning
 // between levels.
 func (hd *hud) setVisible(isVisible bool) {
-	hd.view.SetVisible(isVisible)
+	hd.root.SetVisible(isVisible)
 	hd.mm.setVisible(isVisible)
 }
 
@@ -77,16 +75,16 @@ func (hd *hud) setVisible(isVisible bool) {
 func (hd *hud) setLevel(lvl *level) {
 	hd.pl.setLevel(lvl)
 	hd.xp.setLevel(lvl)
-	hd.mm.setLevel(lvl.view, lvl)
+	hd.mm.setLevel(lvl.cam, lvl)
 }
 
 // have the hud wrap the minimap specifics so as to provide a single
 // outside interface.
-func (hd *hud) addWall(gamex, gamez float64)           { hd.mm.addWall(gamex, gamez) }
-func (hd *hud) remCore(gamex, gamez float64)           { hd.mm.remCore(gamex, gamez) }
-func (hd *hud) addCore(gamex, gamez float64)           { hd.mm.addCore(gamex, gamez) }
-func (hd *hud) resetCores()                            { hd.mm.resetCores() }
-func (hd *hud) update(v vu.View, sentries []*sentinel) { hd.mm.update(v, sentries) }
+func (hd *hud) addWall(gamex, gamez float64)             { hd.mm.addWall(gamex, gamez) }
+func (hd *hud) remCore(gamex, gamez float64)             { hd.mm.remCore(gamex, gamez) }
+func (hd *hud) addCore(gamex, gamez float64)             { hd.mm.addCore(gamex, gamez) }
+func (hd *hud) resetCores()                              { hd.mm.resetCores() }
+func (hd *hud) update(c vu.Camera, sentries []*sentinel) { hd.mm.update(c, sentries) }
 
 // cloakingEffect creates the model shown when the user cloaks.
 func (hd *hud) cloakingEffect(root vu.Pov) vu.Pov {
@@ -325,8 +323,8 @@ func (xp *xpbar) updateKeys(teleportKey, cloakKey int) {
 // 2D perspective.
 type minimap struct {
 	area             // Rectangular area.
-	view   vu.View   // Xztoxy scene.
-	cam    vu.Camera // Quick access to the scene camera.
+	root   vu.Pov    // Root in scene hierarchy.
+	cam    vu.Camera // Xztoxy camera.
 	cores  []vu.Pov  // Keep track of the cores for removal.
 	part   vu.Pov    // Used to transform all the minimap models.
 	bg     vu.Pov    // The white background.
@@ -339,15 +337,14 @@ type minimap struct {
 
 // newMinimap initializes the minimap. It still needs to be populated.
 func newMinimap(root vu.Pov, numTroops int) *minimap {
-	mm := &minimap{}
+	mm := &minimap{root: root}
 	mm.radius = 120
 	mm.scale = 5.0
 	mm.cores = []vu.Pov{}
-	mm.view = root.NewView()
-	mm.view.SetUI()
-	mm.view.SetCull(vu.NewRadiusCull(float64(mm.radius)))
-	mm.cam = mm.view.Cam()
-	mm.cam.SetTransform(vu.XZ_XY)
+	mm.cam = root.NewCam()
+	mm.cam.SetUI()
+	mm.cam.SetCull(vu.NewRadiusCull(float64(mm.radius)))
+	mm.cam.SetView(vu.XZ_XY)
 
 	// create the parent for all the visible minimap pieces.
 	mm.part = root.NewPov().SetLocation(float64(mm.x), 0, float64(-mm.y))
@@ -374,7 +371,7 @@ func newMinimap(root vu.Pov, numTroops int) *minimap {
 
 // setVisible (un)hides all the minimap objects.
 func (mm *minimap) setVisible(isVisible bool) {
-	mm.view.SetVisible(isVisible)
+	mm.root.SetVisible(isVisible)
 }
 
 // resize is responsible for keeping the minimap at the bottom
@@ -392,15 +389,15 @@ func (mm *minimap) setSize(x, y, width, height int) {
 }
 
 // setLevel is called when a level transition happens.
-func (mm *minimap) setLevel(v vu.View, lvl *level) {
-	x, y, z := v.Cam().Location()
+func (mm *minimap) setLevel(cam vu.Camera, lvl *level) {
+	x, y, z := cam.Location()
 	mm.cam.SetLocation(x*mm.scale, y*mm.scale, z*mm.scale)
 
 	// adjust the center location based on the game maze center.
 	mm.cx, mm.cy = float64(lvl.gcx*lvl.units)*mm.scale, float64(-lvl.gcy*lvl.units)*mm.scale
 	mm.ppm.SetLocation(x, y, z)
 	mm.bg.SetLocation(x, y, z)
-	mm.ppm.SetRotation(v.Cam().Lookxz())
+	mm.ppm.SetRotation(cam.Lookxz())
 	mm.setSentryLocations(lvl.sentries)
 	lvl.player.monitorHealth("mmap", mm)
 }
@@ -459,13 +456,13 @@ func (mm *minimap) healthUpdated(health, warn, high int) {
 }
 
 // update adjusts the minimap according to the players new position.
-func (mm *minimap) update(v vu.View, sentries []*sentinel) {
+func (mm *minimap) update(cam vu.Camera, sentries []*sentinel) {
 	scale := mm.scale
-	x, y, z := v.Cam().Location()
+	x, y, z := cam.Location()
 	x, y, z = x*scale, y*scale, z*scale
 	mm.cam.SetLocation(x, y, z)
 	mm.setPlayerLocation(x, y, z)
-	mm.setPlayerRotation(v.Cam().Lookxz())
+	mm.setPlayerRotation(cam.Lookxz())
 	mm.setCenterLocation(x, y, z)
 	mm.setSentryLocations(sentries)
 }

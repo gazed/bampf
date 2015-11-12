@@ -50,7 +50,7 @@ def buildBinary(flags):
         version = subprocess.check_output(shlex.split('git describe')).strip()
     except subprocess.CalledProcessError:
         version = 'v0.0'
-    command = 'go build -ldflags "-X main.version '+version+' '+flags+'" -o target/bampf.raw bampf'
+    command = 'go build -ldflags "-s -X main.version '+version+' '+flags+'" -o target/bampf.raw bampf'
     out, err = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
     print('built binary with command: ' + command)
 

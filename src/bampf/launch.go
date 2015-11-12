@@ -15,7 +15,7 @@ import (
 type launch struct {
 	area                       // The launch screen fills up the game window.
 	root       vu.Pov          //
-	view       vu.View         // Group of model objects for the start screen.
+	cam        vu.Camera       // Group of model objects for the start screen.
 	anim       *startAnimation // The start button animation.
 	buttons    []*button       // The game select and option screen buttons.
 	bg1        vu.Pov          // Background rotating one way.
@@ -33,10 +33,10 @@ func (l *launch) activate(state int) {
 	switch state {
 	case screenActive:
 		l.anim.scale = 200
-		l.view.SetVisible(true)
+		l.root.SetVisible(true)
 		l.evolving = false
 	case screenDeactive:
-		l.view.SetVisible(false)
+		l.root.SetVisible(false)
 		l.evolving = false
 	case screenEvolving:
 		l.evolving = true
@@ -99,8 +99,8 @@ func newLaunchScreen(mp *bampf) *launch {
 	l := &launch{}
 	l.mp = mp
 	l.root = mp.eng.Root().NewPov()
-	l.view = l.root.NewView()
-	l.view.SetUI()
+	l.cam = l.root.NewCam()
+	l.cam.SetUI()
 	l.setSize(mp.eng.State().Screen())
 	l.buttonSize = 64
 
@@ -137,7 +137,7 @@ func newLaunchScreen(mp *bampf) *launch {
 
 	// start the button animation.
 	l.mp.ani.addAnimation(l.newButtonAnimation())
-	l.view.SetVisible(false)
+	l.root.SetVisible(false)
 	return l
 }
 
@@ -163,7 +163,7 @@ func (l *launch) handleResize(width, height int) {
 // setSize adjusts the start screen dimensions.
 func (l *launch) setSize(x, y, width, height int) {
 	l.x, l.y, l.w, l.h = 0, 0, width, height
-	l.view.Cam().SetOrthographic(0, float64(l.w), 0, float64(l.h), 0, 10)
+	l.cam.SetOrthographic(0, float64(l.w), 0, float64(l.h), 0, 10)
 	l.cx, l.cy = l.center()
 }
 

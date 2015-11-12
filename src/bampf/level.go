@@ -17,7 +17,6 @@ import (
 type level struct {
 	mp        *bampf       // Main program.
 	root      vu.Pov       // Top of local transform hierarchy.
-	view      vu.View      // Camera/player position for the stage.
 	cam       vu.Camera    // Quick access to the scene camera.
 	hd        *hud         // 2D information display for the stage.
 	num       int          // Level number.
@@ -54,9 +53,8 @@ func newLevel(g *game, levelNum int) *level {
 	lvl.colour = 1.0
 	lvl.fov = 75
 	lvl.root = g.mp.eng.Root().NewPov()
-	lvl.view = lvl.root.NewView()
-	lvl.view.SetCull(vu.NewFrontCull(g.vr))
-	lvl.cam = lvl.view.Cam()
+	lvl.cam = lvl.root.NewCam()
+	lvl.cam.SetCull(vu.NewFrontCull(g.vr))
 	lvl.cam.SetPerspective(lvl.fov, float64(g.ww)/float64(g.wh), 0.1, 50)
 
 	// save everything as one game stage.
@@ -102,7 +100,7 @@ func (lvl *level) setHudVisible(isVisible bool) {
 
 // setVisible toggles the visibility of the entire level.
 func (lvl *level) setVisible(isVisible bool) {
-	lvl.view.SetVisible(isVisible)
+	lvl.root.SetVisible(isVisible)
 	lvl.hd.setVisible(isVisible)
 }
 
@@ -127,7 +125,7 @@ func (lvl *level) update() {
 	lvl.moveSentinels()
 	lvl.collideSentinels()
 	lvl.createCore()
-	lvl.hd.update(lvl.view, lvl.sentries)
+	lvl.hd.update(lvl.cam, lvl.sentries)
 	lvl.player.updateEnergy()
 	lvl.hd.cloakingActive(lvl.player.cloaked)
 }

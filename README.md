@@ -14,7 +14,7 @@ number of AI's in the later levels.
 Build
 -----
 
-* Install the [vu](https://github.com/gazed/vu) engine first. 
+* Install the [vu](https://github.com/gazed/vu) engine first.
 * Create developer builds using ``go build`` in ``bampf/src/bampf``.
   Run the game ``./bampf``.
 * Create product builds using ``build.py`` in ``bampf``. All build output
@@ -34,12 +34,12 @@ Build
 
 **Developer Build Dependencies**
 
-* go1.3
+* go1.5
 * vu engine.
 
 **Production Build Dependencies**
 
-* go1.3
+* go1.5
 * vu engine.
 * python for the build script.
 * git for product version numbering.
