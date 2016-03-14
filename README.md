@@ -1,4 +1,4 @@
-<!-- Copyright © 2013-2014 Galvanized Logic Inc.                       -->
+<!-- Copyright © 2013-2016 Galvanized Logic Inc.                       -->
 <!-- Use is governed by a BSD-style license found in the LICENSE file. -->
 
 #Bampf
@@ -6,10 +6,10 @@
 Bampf is a simple 3D arcade style game. Collect energy cores in order to finish
 a level. Teleport (bampf) to safety or use cloaking abilities to avoid sentinels.
 
-Bampf was created primarily to test the [vu](https://github.com/gazed/vu) 3D engine. Its levels are used to
-benchmark the engine by substantially increasing the number of triangles rendered
-each level. As such the game isn't really meant to be winnable given the large
-number of AI's in the later levels.
+Bampf was created primarily to test the [vu](https://github.com/gazed/vu) 3D engine.
+Its levels are used to benchmark the engine by substantially increasing the number
+of triangles rendered each level. As such the game isn't really meant to be winnable
+given the large number of AI's in the later levels.
 
 Build
 -----
@@ -34,12 +34,12 @@ Build
 
 **Developer Build Dependencies**
 
-* go1.5
+* go1.6
 * vu engine.
 
 **Production Build Dependencies**
 
-* go1.5
+* go1.6
 * vu engine.
 * python for the build script.
 * git for product version numbering.
