@@ -1,23 +1,19 @@
 #! /usr/bin/python
-# Copyright (c) 2013-2015 Galvanized Logic Inc.
-# Use is governed by a BSD-style license found in the LICENSE file.
+# Copyright (c) 2013-2016 Galvanized Logic Inc.
 
 """
 The build and distribution script for the Bampf project.
+Expected to be run from this directory.
+All build output placed in a local 'target' directory
 
-This script detects and builds for the platform that it is on.  All the build
-knowledge for any computer architecture is contained in this script.
-Note that build commands are specified in such a way that they can be easily
-copied and tested in a shell.
-
-This script is expected to be called by:
-   1) a continuous integration script from a dedicated build server, or,
-   2) a local developer testing the build.
+This script detects and builds for the platform that it is on.
+All the build knowledge for any computer architecture is contained
+in this script. Note that build commands are specified in such
+a way that they can be easily copied and tested in a shell.
 """
 
 import sys          # detect which arch for the build
 import os           # for directory manipulation
-import signal       # for process signal definitions.
 import shutil       # for directory and file manipulation
 import shlex        # run and control shell commands
 import subprocess   # for calling shell commands
@@ -25,7 +21,7 @@ import glob         # for unix pattern matching
 
 def clean():
     # Remove all generated files.
-    generatedOutput = ['pkg', 'bin', 'target']
+    generatedOutput = ['target']
     print 'Removing generated output:'
     for gdir in generatedOutput:
         if os.path.exists(gdir):
@@ -58,10 +54,11 @@ def zipResources():
     # zip the resources and include them with the binary.
     # chdir to get resource file zip proper names.
     cwd = os.getcwd()
-    os.chdir('src/bampf')
-    subprocess.call(['zip', 'resources.zip']+glob.glob('models/*')+glob.glob('source/*')+glob.glob('images/*')+glob.glob('audio/*'))
+    os.chdir('..')
+    subprocess.call(['zip', 'resources.zip']+glob.glob('models/*')+glob.glob('source/*')+
+            glob.glob('images/*')+glob.glob('audio/*'))
     os.chdir(cwd)
-    shutil.move('src/bampf/resources.zip', 'target/resources.zip')
+    shutil.move('../resources.zip', 'target/resources.zip')
 
 def buildOSX():
     print 'Building the osx application bundle.'
@@ -77,16 +74,14 @@ def buildOSX():
     base = 'target/Bampf.app/Contents'
     os.makedirs(base + '/MacOS')
     os.makedirs(base + '/Resources')
-    os.makedirs(base + '/Frameworks')
 
     # create the osx bundle by putting everything in the proper directories.
-    subprocess.call(shlex.split('cp src/Info.plist target/Bampf.app/Contents/'))
+    subprocess.call(shlex.split('cp Info.plist target/Bampf.app/Contents/'))
     subprocess.call(shlex.split('cp target/bampf target/Bampf.app/Contents/MacOS/Bampf'))
     subprocess.call(shlex.split('cp target/resources.zip target/Bampf.app/Contents/Resources/'))
-    subprocess.call(shlex.split('cp src/bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns'))
+    subprocess.call(shlex.split('cp bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns'))
 
-    # change the directory mode to be an application package and make a copy for app store signing.
-    shutil.copymode('/Applications/Contacts.app', base)
+    # Create a signed copy for app store submission.
     if os.path.exists('target/app'):
         shutil.rmtree('target/app')
     os.makedirs('target/app')
@@ -96,14 +91,11 @@ def buildWindows():
     print 'Building windows'
 
     # create the icon resource to include with the binary.
-    cwd = os.getcwd()
-    os.chdir('src')
-    subprocess.call(shlex.split('windres bampf.rc -O coff -o bampf/resources.syso'))
-    os.chdir(cwd)
+    subprocess.call(shlex.split('windres bampf.rc -O coff -o ../resources.syso'))
 
     # build the raw binary and cleanup the generated icon (windows resource) file.
     buildBinary('-H windowsgui')
-    os.remove('src/bampf/resources.syso')
+    os.remove('../resources.syso')
 
     # combine the exe and the resources. Need to redirect output for cat to work.
     zipResources()

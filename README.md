@@ -14,11 +14,14 @@ given the large number of AI's in the later levels.
 Build
 -----
 
-* Install the [vu](https://github.com/gazed/vu) engine first.
-* Create developer builds using ``go build`` in ``bampf/src/bampf``.
+* Install the [vu](https://github.com/gazed/vu) engine first using ``go get github.com/gazed/vu``.
+* Download bampf into the ``src`` directory of a Go workspace which is
+  any directory in the ``$GOPATH``. Using ``go get github.com/gazed/bampf``
+  also works and will place bampf in ``$GOPATH/src/github.com/gazed/bampf``.
+* Create developer builds using ``go build`` from the ``bampf`` directory.
   Run the game ``./bampf``.
-* Create product builds using ``build.py`` in ``bampf``. All build output
-  is located in the ``target`` directory. Eg:
+* Create shippable product builds using ``build.py`` from ``bampf/admin``.
+  All build output is located in the ``bampf/admin/target`` directory. Eg:
     * OS X:
 
         ```bash
@@ -55,6 +58,6 @@ Transitive dependencies from the ``vu`` engine.
 Limitations
 -----------
 
-* Same dependency limitations as the vu engine.
+* Same dependency limitations as the [vu](https://github.com/gazed/vu) engine.
 * Production builds use zip. On Windows there is a WIN 64-bit zip available at
   willus.com/archive/zip64. Put zip.exe in PATH.
