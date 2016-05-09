@@ -16,8 +16,9 @@ Build
 
 * Install the [vu](https://github.com/gazed/vu) engine first using ``go get github.com/gazed/vu``.
 * Download bampf into the ``src`` directory of a Go workspace which is
-  any directory in the ``$GOPATH``. Using ``go get github.com/gazed/bampf``
-  also works and will place bampf in ``$GOPATH/src/github.com/gazed/bampf``.
+  any directory in the ``$GOPATH``. Using just ``go get github.com/gazed/bampf``
+  places bampf in ``$GOPATH/src/github.com/gazed/bampf`` and works for producing
+  developer builds, but not production builds.
 * Create developer builds using ``go build`` from the ``bampf`` directory.
   Run the game ``./bampf``.
 * Create shippable product builds using ``build.py`` from ``bampf/admin``.
