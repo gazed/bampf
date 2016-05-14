@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -268,11 +268,11 @@ func (tr *trooper) trash() {
 		b.trash()
 	}
 	if tr.center != nil {
-		tr.center.Dispose(vu.POV)
+		tr.center.Dispose(vu.PovNode)
 		tr.center = nil
 	}
 	if tr.neo != nil {
-		tr.neo.Dispose(vu.POV)
+		tr.neo.Dispose(vu.PovNode)
 	}
 	tr.neo = nil
 }
@@ -326,7 +326,7 @@ func (tr *trooper) updateEnergy() {
 
 	// teleport energy increases to max.
 	if tr.teleportEnergy < tr.temax {
-		tr.teleportEnergy += 1
+		tr.teleportEnergy++
 		change = true
 	}
 
@@ -512,7 +512,7 @@ func (p *panel) merge() {
 // to ensure the cell count is correct.
 func (p *panel) trash() {
 	if p.slab != nil {
-		p.slab.Dispose(vu.POV)
+		p.slab.Dispose(vu.PovNode)
 		p.slab = nil
 	}
 	for _, cube := range p.cubes {
@@ -592,7 +592,7 @@ func (c *cube) addCell() {
 // removeCell removes the last cell from the list of cube cells.
 func (c *cube) removeCell() {
 	last := len(c.cells)
-	c.cells[last-1].Dispose(vu.POV)
+	c.cells[last-1].Dispose(vu.PovNode)
 	c.cells[last-1] = nil
 	c.cells = c.cells[:last-1]
 }

@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -78,9 +78,9 @@ func (g *game) processInput(in *vu.Input, eventq *list.List) {
 	g.dt = in.Dt
 	for press, down := range in.Down {
 		switch {
-		case press == vu.K_Esc && down == 1 && !g.evolving:
+		case press == vu.KEsc && down == 1 && !g.evolving:
 			publish(eventq, toggleOptions, nil)
-		case press == vu.K_Space && down == 1:
+		case press == vu.KSpace && down == 1:
 			publish(eventq, skipAnim, nil)
 		case press == g.keys[0] && !g.evolving: // rebindable keys from here on.
 			publish(eventq, goForward, down)
@@ -367,7 +367,7 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 	case 0:
 		g := f.g
 		g.evolving = true
-		g.cl.body.Dispose(vu.BODY)
+		g.cl.body.Dispose(vu.PovBody)
 		x, z := 4.0, 10.0 // standard starting spot.
 		if f.out {
 
@@ -414,7 +414,7 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 			f.Wrap()
 			return false // animation done.
 		}
-		f.tickCnt += 1
+		f.tickCnt++
 		return true
 	default:
 		return false // animation done.

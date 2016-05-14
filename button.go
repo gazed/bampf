@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -13,7 +13,7 @@ import (
 type button struct {
 	area                  // Button is rectangular.
 	id        string      // Button unique name.
-	eventId   int         // game event identifier.
+	eventID   int         // game event identifier.
 	eventData interface{} // game event data.
 	icon      vu.Pov      // Button image.
 	hilite    vu.Pov      // Hover overlay.
@@ -27,10 +27,10 @@ type button struct {
 //   size   is both the width and height.
 //   icon   is the (already loaded) texture image.
 //   action is the action to perform when the button is pressed.
-func newButton(root vu.Pov, size int, icon string, eventId int, eventData interface{}) *button {
+func newButton(root vu.Pov, size int, icon string, eventID int, eventData interface{}) *button {
 	btn := &button{}
 	btn.model = root.NewPov()
-	btn.eventId = eventId
+	btn.eventID = eventID
 	btn.eventData = eventData
 	btn.w, btn.h = size, size
 
@@ -71,7 +71,7 @@ func (b *button) label(part vu.Pov, keyCode int) {
 			b.banner.NewModel("uv").AddTex(texture).LoadFont("lucidiaSu22")
 		}
 		if keyCode == 0 {
-			keyCode = vu.K_Space
+			keyCode = vu.KSpace
 		}
 		b.banner.Model().SetPhrase(string(keysym))
 	}

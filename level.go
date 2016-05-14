@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -39,11 +39,11 @@ type level struct {
 // newLevel creates the indicated game level.
 func newLevel(g *game, levelNum int) *level {
 	var levelType = map[int]grid.Grid{
-		0: grid.New(grid.DENSE_SKIRMISH),
-		1: grid.New(grid.DENSE_SKIRMISH),
-		2: grid.New(grid.SPARSE_SKIRMISH),
-		3: grid.New(grid.ROOMS_SKIRMISH),
-		4: grid.New(grid.ROOMS_SKIRMISH),
+		0: grid.New(grid.DenseSkirmish),
+		1: grid.New(grid.DenseSkirmish),
+		2: grid.New(grid.SparseSkirmish),
+		3: grid.New(grid.RoomSkirmish),
+		4: grid.New(grid.RoomSkirmish),
 	}
 
 	// initialize the scenes.
@@ -176,10 +176,10 @@ func (lvl *level) deactivate() {
 
 	// remove the walls and floor from physics.
 	for _, wall := range lvl.walls {
-		wall.Dispose(vu.BODY)
+		wall.Dispose(vu.PovBody)
 	}
-	lvl.floor.Dispose(vu.BODY)
-	lvl.body.Dispose(vu.BODY)
+	lvl.floor.Dispose(vu.PovBody)
+	lvl.body.Dispose(vu.PovBody)
 
 	// remove the cores.
 	lvl.cc.reset()
@@ -371,7 +371,7 @@ func (lvl *level) createCore() {
 // their original values in case the player has lost sight of the maze.
 func (lvl *level) teleport() {
 	if lvl.player.teleport() {
-		lvl.body.Dispose(vu.BODY)
+		lvl.body.Dispose(vu.PovBody)
 		lvl.body.SetLocation(0, 0.5, 10)
 		lvl.body.SetRotation(lin.QI)
 		lvl.cam.SetLocation(0, 0.5, 10)
@@ -426,7 +426,7 @@ func (ta *teleportAnimation) Animate(dt float64) bool {
 			ta.Wrap()
 			return false // animation done.
 		}
-		ta.tkcnt += 1
+		ta.tkcnt++
 		return true
 	default:
 		return false // animation done.
@@ -475,7 +475,7 @@ func (ea *energyLossAnimation) Animate(dt float64) bool {
 			ea.Wrap()
 			return false // animation done.
 		}
-		ea.tkcnt += 1
+		ea.tkcnt++
 		return true
 	default:
 		return false // animation done.

@@ -2,33 +2,33 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>English</string>
-	<key>CFBundleDisplayName</key>
-	<string>Bampf</string>
-	<key>CFBundleExecutable</key>
-	<string>Bampf</string>
-	<key>CFBundleIconFile</key>
-	<string>Bampf.icns</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.galvanizedlogic.bampf</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>Bampf</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleVersion</key>
-	<string>1.2</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.2</string>
-	<key>CFBundleSignature</key>
-	<string>BAMP</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.arcade-games</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>10.10</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>© 2013, Galvanized Logic Inc.</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Bampf</string>
+    <key>CFBundleExecutable</key>
+    <string>Bampf</string>
+    <key>CFBundleIconFile</key>
+    <string>Bampf.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.galvanizedlogic.bampf</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Bampf</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.2</string>
+    <key>CFBundleSignature</key>
+    <string>BAMP</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.arcade-games</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.11</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2013, Galvanized Logic Inc.</string>
 </dict>
 </plist>

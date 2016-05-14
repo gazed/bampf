@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 // Package bampf is a 3D arcade collection game with random levels.
@@ -342,7 +342,7 @@ const (
 var logf = func(format string, v ...interface{}) {}
 
 // setLogger turns logging on in debug loads.
-func (b *bampf) setLogger(gi interface{}) {
+func (mp *bampf) setLogger(gi interface{}) {
 	if fn, ok := gi.(interface {
 		logger(string, ...interface{})
 	}); ok {
@@ -407,8 +407,8 @@ type rebindKeyEvent struct {
 }
 
 // publish adds the event to the end of the game event queue.
-func publish(eventq *list.List, eventId int, eventData interface{}) {
-	eventq.PushBack(&event{id: eventId, data: eventData})
+func publish(eventq *list.List, eventID int, eventData interface{}) {
+	eventq.PushBack(&event{id: eventID, data: eventData})
 }
 
 // game events

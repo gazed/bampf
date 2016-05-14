@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -344,7 +344,7 @@ func newMinimap(root vu.Pov, numTroops int) *minimap {
 	mm.cam = root.NewCam()
 	mm.cam.SetUI()
 	mm.cam.SetCull(vu.NewRadiusCull(float64(mm.radius)))
-	mm.cam.SetView(vu.XZ_XY)
+	mm.cam.SetView(vu.XzXy)
 
 	// create the parent for all the visible minimap pieces.
 	mm.part = root.NewPov().SetLocation(float64(mm.x), 0, float64(-mm.y))
@@ -428,7 +428,7 @@ func (mm *minimap) remCore(gamex, gamez float64) {
 		cx, _, cz := core.Location()
 		cx, cz = lin.Round(cx, 0), lin.Round(cz, 0)
 		if cx == gx && cz == gz {
-			core.Dispose(vu.POV)
+			core.Dispose(vu.PovNode)
 			mm.cores = append(mm.cores[:index], mm.cores[index+1:]...)
 			return
 		}
@@ -440,7 +440,7 @@ func (mm *minimap) remCore(gamex, gamez float64) {
 // this level is clear of cores the next time it is activated.
 func (mm *minimap) resetCores() {
 	for _, core := range mm.cores {
-		core.Dispose(vu.POV)
+		core.Dispose(vu.PovNode)
 	}
 	mm.cores = []vu.Pov{}
 }

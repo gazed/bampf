@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -56,25 +56,25 @@ func (c *config) processInput(in *vu.Input, eventq *list.List) {
 	overIndex := c.hover(in.Mx, in.My) // per tick processing.
 	for press, down := range in.Down {
 		switch {
-		case press == vu.K_Esc && down == 1:
+		case press == vu.KEsc && down == 1:
 			publish(eventq, toggleOptions, nil)
 		case overIndex >= 0 && down == 1:
 			publish(eventq, rebindKey, rebindKeyEvent{index: overIndex, key: press})
-		case press == vu.K_Lm && down == 1:
+		case press == vu.KLm && down == 1:
 			for _, btn := range c.buttons {
 				if btn.clicked(in.Mx, in.My) {
-					publish(eventq, btn.eventId, btn.eventData)
+					publish(eventq, btn.eventID, btn.eventData)
 				}
 			}
 			switch {
 			case c.mute.clicked(in.Mx, in.My):
-				publish(eventq, c.mute.eventId, c.mute.eventData)
+				publish(eventq, c.mute.eventID, c.mute.eventData)
 			case c.info.clicked(in.Mx, in.My):
-				publish(eventq, c.info.eventId, c.info.eventData)
+				publish(eventq, c.info.eventID, c.info.eventData)
 			case c.restart.clicked(in.Mx, in.My):
-				publish(eventq, c.restart.eventId, c.restart.eventData)
+				publish(eventq, c.restart.eventID, c.restart.eventData)
 			case c.back.clicked(in.Mx, in.My):
-				publish(eventq, c.back.eventId, c.back.eventData)
+				publish(eventq, c.back.eventID, c.back.eventData)
 			}
 		}
 	}
@@ -127,12 +127,12 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
 	c.bg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
 	c.keys = []int{ // rebindable key defaults.
-		vu.K_W, // forwards
-		vu.K_S, // backwards
-		vu.K_A, // left
-		vu.K_D, // right
-		vu.K_C, // cloak
-		vu.K_T, // teleport
+		vu.KW, // forwards
+		vu.KS, // backwards
+		vu.KA, // left
+		vu.KD, // right
+		vu.KC, // cloak
+		vu.KT, // teleport
 	}
 	if len(keys) == len(c.keys) { // override with saved keys.
 		c.keys = keys
@@ -229,8 +229,8 @@ func (c *config) setExitTransition(transition int) {
 // rebindKey changes the key for a given reaction. If the newKey is already used,
 // then it's reaction is bound to the oldKey. Otherwise the oldKey is dropped.
 func (c *config) rebindKey(index int, key int) {
-	if key != vu.K_Esc && key != vu.K_Space && key != vu.K_Cmd && key != vu.K_Ctl &&
-		key != vu.K_Fn && key != vu.K_Shift && key != vu.K_Alt {
+	if key != vu.KEsc && key != vu.KSpace && key != vu.KCmd && key != vu.KCtl &&
+		key != vu.KFn && key != vu.KShift && key != vu.KAlt {
 
 		// check if the key is already used and swap if necessary.
 		swap := -1

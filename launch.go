@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -47,14 +47,14 @@ func (l *launch) activate(state int) {
 func (l *launch) processInput(in *vu.Input, eventq *list.List) {
 	for press, down := range in.Down {
 		switch {
-		case press == vu.K_Esc && down == 1 && !l.evolving:
+		case press == vu.KEsc && down == 1 && !l.evolving:
 			publish(eventq, toggleOptions, nil)
-		case press == vu.K_Space && down == 1:
+		case press == vu.KSpace && down == 1:
 			publish(eventq, skipAnim, nil)
-		case press == vu.K_Lm && down == 1:
+		case press == vu.KLm && down == 1:
 			for _, btn := range l.buttons {
 				if btn.clicked(in.Mx, in.My) {
-					publish(eventq, btn.eventId, btn.eventData)
+					publish(eventq, btn.eventID, btn.eventData)
 				}
 			}
 			if l.anim.clicked(in.Mx, in.My) {
@@ -238,7 +238,7 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 			f.Wrap()
 			return false // animation done.
 		}
-		f.tkcnt += 1
+		f.tkcnt++
 		return true
 	default:
 		return false // animation done.

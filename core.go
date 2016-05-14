@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Galvanized Logic Inc.
+// Copyright © 2013-2016 Galvanized Logic Inc.
 // Use is governed by a BSD-style license found in the LICENSE file.
 
 package main
@@ -96,7 +96,7 @@ func (cc *coreControl) remCore(index int) (gamex, gamez float64) {
 	cc.cores = append(cc.cores[:index], cc.cores[index+1:]...)
 
 	// remove the core from the display and minimap.
-	core.Dispose(vu.POV)
+	core.Dispose(vu.PovNode)
 	gamex, _, gamez = core.Location()
 	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 
@@ -133,7 +133,7 @@ func (cc *coreControl) addDropLocation(gridx, gridy int) {
 // level before transitioning to a new level.
 func (cc *coreControl) reset() {
 	for _, core := range cc.cores {
-		core.Dispose(vu.POV)
+		core.Dispose(vu.PovNode)
 	}
 	cc.cores = []vu.Pov{}
 	cc.tiles = []gridSpot{}
