@@ -14,12 +14,12 @@ import (
 // to choose the game difficulty before starting to play.
 type launch struct {
 	area                       // The launch screen fills up the game window.
-	root       vu.Pov          //
-	cam        vu.Camera       // Group of model objects for the start screen.
+	root       *vu.Pov         //
+	cam        *vu.Camera      // Group of model objects for the start screen.
 	anim       *startAnimation // The start button animation.
 	buttons    []*button       // The game select and option screen buttons.
-	bg1        vu.Pov          // Background rotating one way.
-	bg2        vu.Pov          // Background rotating the other way.
+	bg1        *vu.Pov         // Background rotating one way.
+	bg2        *vu.Pov         // Background rotating the other way.
 	buttonSize int             // Width and height of each button.
 	mp         *bampf          // Needed for toggling the option screen.
 	evolving   bool            // True when player is moving between levels.
@@ -33,10 +33,10 @@ func (l *launch) activate(state int) {
 	switch state {
 	case screenActive:
 		l.anim.scale = 200
-		l.root.SetVisible(true)
+		l.root.Cull = false
 		l.evolving = false
 	case screenDeactive:
-		l.root.SetVisible(false)
+		l.root.Cull = true
 		l.evolving = false
 	case screenEvolving:
 		l.evolving = true
@@ -99,18 +99,17 @@ func newLaunchScreen(mp *bampf) *launch {
 	l := &launch{}
 	l.mp = mp
 	l.root = mp.eng.Root().NewPov()
-	l.cam = l.root.NewCam()
-	l.cam.SetUI()
+	l.cam = l.root.NewCam().SetUI()
 	l.setSize(mp.eng.State().Screen())
 	l.buttonSize = 64
 
 	// create the background.
 	l.bg1 = l.root.NewPov()
-	m := l.bg1.NewModel("uv").LoadMesh("icon").AddTex("backdrop")
+	m := l.bg1.NewModel("uv", "msh:icon", "tex:backdrop")
 	m.SetAlpha(0.5)
 	m.SetUniform("spin", 10.0)
 	l.bg2 = l.root.NewPov()
-	m = l.bg2.NewModel("uv").LoadMesh("icon").AddTex("backdrop")
+	m = l.bg2.NewModel("uv", "msh:icon", "tex:backdrop")
 	m.SetAlpha(0.5)
 	m.SetUniform("spin", -10.0)
 
@@ -137,7 +136,7 @@ func newLaunchScreen(mp *bampf) *launch {
 
 	// start the button animation.
 	l.mp.ani.addAnimation(l.newButtonAnimation())
-	l.root.SetVisible(false)
+	l.root.Cull = true
 	return l
 }
 
@@ -153,9 +152,9 @@ func (l *launch) handleResize(width, height int) {
 			size = l.h
 		}
 		l.bg1.SetScale(float64(size), float64(size), 1)
-		l.bg1.SetLocation(float64(l.w/2)-5, float64(l.h/2)-5, 1)
+		l.bg1.SetAt(float64(l.w/2)-5, float64(l.h/2)-5, 1)
 		l.bg2.SetScale(float64(size), float64(size), 1)
-		l.bg2.SetLocation(float64(l.w/2)-5, float64(l.h/2)-5, 1)
+		l.bg2.SetAt(float64(l.w/2)-5, float64(l.h/2)-5, 1)
 	}
 	l.layout(1)
 }
@@ -330,21 +329,21 @@ func (ba *buttonAnimation) Wrap() {
 // normal animation as it is also used as the game start button.
 type startAnimation struct {
 	area            // Start animation acts like a button.
-	parent vu.Pov   // Parent part of the player.
+	parent *vu.Pov  // Parent part of the player.
 	cx, cy float64  // Center of the area.
 	player *trooper // Player can be new or saved.
-	hilite vu.Pov   // Hover overlay.
+	hilite *vu.Pov  // Hover overlay.
 	scale  float64  // Controls the animation size.
 }
 
 // newStartAnimation creates the start screen animation.
-func newStartAnimation(mp *bampf, parent vu.Pov, screenWidth, screenHeight int) *startAnimation {
+func newStartAnimation(mp *bampf, parent *vu.Pov, screenWidth, screenHeight int) *startAnimation {
 	sa := &startAnimation{}
 	sa.parent = parent
 	sa.scale = 200
 	sa.hilite = parent.NewPov()
-	sa.hilite.NewModel("alpha").LoadMesh("square").LoadMat("white")
-	sa.hilite.SetVisible(false)
+	sa.hilite.NewModel("alpha", "msh:square", "mat:white")
+	sa.hilite.Cull = true
 	sa.resize(screenWidth, screenHeight)
 	sa.showLevel(0)
 	return sa
@@ -376,7 +375,7 @@ func (sa *startAnimation) resize(screenWidth, screenHeight int) {
 	sa.x, sa.y = int(sa.cx)-size, int(sa.cy)-size
 
 	// reposition the hover hilite.
-	sa.hilite.SetLocation(sa.cx, sa.cy, 0)
+	sa.hilite.SetAt(sa.cx, sa.cy, 0)
 	sa.hilite.SetScale(float64(size), float64(size), 1)
 
 	// reposition the trooper.
@@ -392,9 +391,9 @@ func (sa *startAnimation) clicked(mx, my int) bool {
 
 // hover shows the hover part when the mouse is over the start button.
 func (sa *startAnimation) hover(mx, my int) {
-	sa.hilite.SetVisible(false)
+	sa.hilite.Cull = true
 	if mx >= sa.x && mx <= sa.x+sa.w && my >= sa.y && my <= sa.y+sa.h {
-		sa.hilite.SetVisible(true)
+		sa.hilite.Cull = false
 	}
 }
 

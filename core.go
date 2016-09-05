@@ -15,7 +15,7 @@ import (
 // coreControl tracks available core drop locations and regulates how fast
 // new cores appear.
 type coreControl struct {
-	cores   []vu.Pov      // cores available to be collected.
+	cores   []*vu.Pov     // cores available to be collected.
 	tiles   []gridSpot    // core drop locations.
 	saved   []gridSpot    // remember the core drop locations for resets.
 	last    time.Time     // last time a core was dropped.
@@ -30,7 +30,7 @@ func newCoreControl(units int, ani *animator) *coreControl {
 	cc := &coreControl{}
 	cc.ani = ani
 	cc.units = float64(units)
-	cc.cores = []vu.Pov{}
+	cc.cores = []*vu.Pov{}
 	cc.saved = []gridSpot{}
 	cc.tiles = []gridSpot{}
 	cc.spot = &gridSpot{}
@@ -64,7 +64,7 @@ func (cc *coreControl) dropSpot() (gridx, gridy int) {
 
 // dropCore creates a new core. Create it high so that it drops.
 // Return the x, z game location of the dropped core.
-func (cc *coreControl) dropCore(root vu.Pov, fade float64, gridx, gridy int) (gamex, gamez float64) {
+func (cc *coreControl) dropCore(root *vu.Pov, fade float64, gridx, gridy int) (gamex, gamez float64) {
 
 	// remove the dropped spot from the list of available spots.
 	removed := false // sanity check.
@@ -84,7 +84,7 @@ func (cc *coreControl) dropCore(root vu.Pov, fade float64, gridx, gridy int) (ga
 	// add the core to the list of dropped cores.
 	cc.cores = append(cc.cores, core)
 	gamex, gamez = toGame(gridx, gridy, cc.units)
-	core.SetLocation(gamex, 10, gamez) // start high and animate drop to floor level.
+	core.SetAt(gamex, 10, gamez) // start high and animate drop to floor level.
 	cc.ani.addAnimation(&coreDropAnimation{core: core})
 	return gamex, gamez
 }
@@ -97,7 +97,7 @@ func (cc *coreControl) remCore(index int) (gamex, gamez float64) {
 
 	// remove the core from the display and minimap.
 	core.Dispose(vu.PovNode)
-	gamex, _, gamez = core.Location()
+	gamex, _, gamez = core.At()
 	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 
 	// make the tile available for a new drop. Use the old core location.
@@ -111,7 +111,7 @@ func (cc *coreControl) hitCore(gamex, gamez float64) (coreIndex int) {
 	coreIndex = -1
 	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
 	for index, core := range cc.cores {
-		x, y, z := core.Location()
+		x, y, z := core.At()
 		corex, corey := toGrid(x, y, z, cc.units)
 		if gridx == corex && gridy == corey {
 			coreIndex = index
@@ -121,9 +121,9 @@ func (cc *coreControl) hitCore(gamex, gamez float64) (coreIndex int) {
 	return coreIndex
 }
 
-// addDropLocation adds a spot where cores are allowed to be dropped.
+// addDropAt adds a spot where cores are allowed to be dropped.
 // The coordinates are specified in grid coordinates.
-func (cc *coreControl) addDropLocation(gridx, gridy int) {
+func (cc *coreControl) addDropAt(gridx, gridy int) {
 	cc.saved = append(cc.saved, gridSpot{gridx, gridy})
 	cc.tiles = append(cc.tiles, gridSpot{gridx, gridy})
 }
@@ -135,7 +135,7 @@ func (cc *coreControl) reset() {
 	for _, core := range cc.cores {
 		core.Dispose(vu.PovNode)
 	}
-	cc.cores = []vu.Pov{}
+	cc.cores = []*vu.Pov{}
 	cc.tiles = []gridSpot{}
 	for _, spot := range cc.saved {
 		cc.tiles = append(cc.tiles, gridSpot{spot.x, spot.y})
@@ -144,10 +144,10 @@ func (cc *coreControl) reset() {
 
 // createCore makes the new core model.
 // Create a core image using a single multi-texture shader.
-func (cc *coreControl) createCore(root vu.Pov, fade float64) vu.Pov {
+func (cc *coreControl) createCore(root *vu.Pov, fade float64) *vu.Pov {
 	core := root.NewPov().SetScale(0.25, 0.25, 0.25)
-	model := core.NewModel("spinball").LoadMesh("billboard")
-	model.AddTex("ele").AddTex("ele").AddTex("halo").AddTex("halo")
+	model := core.NewModel("spinball", "msh:billboard")
+	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
 	model.SetAlpha(0.6)
 	model.SetUniform("fd", fade)
 	return core
@@ -188,7 +188,7 @@ func toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
 
 // coreDropAnimation shows cores falling when they are first created.
 type coreDropAnimation struct {
-	core    vu.Pov  // core to animate.
+	core    *vu.Pov // core to animate.
 	x, y, z float64 // core location.
 	drop    float64 // the amount to fall each tick.
 	rest    float64 // final resting location.
@@ -200,16 +200,16 @@ type coreDropAnimation struct {
 func (ca *coreDropAnimation) Animate(dt float64) bool {
 	switch ca.state {
 	case 0:
-		ca.ticks = 50                         // total animation time.
-		ca.rest = 0.25                        // final core height.
-		ca.x, ca.y, ca.z = ca.core.Location() // initial location.
+		ca.ticks = 50                   // total animation time.
+		ca.rest = 0.25                  // final core height.
+		ca.x, ca.y, ca.z = ca.core.At() // initial location.
 		ca.drop = (ca.rest - ca.y) / float64(ca.ticks)
 		ca.state = 1
 		return true
 	case 1:
 		if ca.ticks > 0 {
 			ca.y += ca.drop
-			ca.core.SetLocation(ca.x, ca.y, ca.z)
+			ca.core.SetAt(ca.x, ca.y, ca.z)
 			ca.ticks--
 			return true // animation not done.
 		}
@@ -223,6 +223,6 @@ func (ca *coreDropAnimation) Animate(dt float64) bool {
 // Wrap finishes the core drop by ensuring the core is at its
 // final location.
 func (ca *coreDropAnimation) Wrap() {
-	ca.core.SetLocation(ca.x, ca.rest, ca.z)
+	ca.core.SetAt(ca.x, ca.rest, ca.z)
 	ca.state = 2
 }

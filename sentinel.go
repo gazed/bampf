@@ -21,27 +21,27 @@ import (
 // sentinel tracks and moves one player enemy. The maze position information
 // is kept as x,y grid spots.
 type sentinel struct {
-	part   vu.Pov    // Top level for model transforms.
-	model  vu.Pov    // Simple model for initial levels.
-	center vu.Pov    // Add some difference for later levels.
+	part   *vu.Pov   // Top level for model transforms.
+	model  *vu.Pov   // Simple model for initial levels.
+	center *vu.Pov   // Add some difference for later levels.
 	prev   *gridSpot // Sentinels previous location.
 	next   *gridSpot // Sentinels next location.
 	units  float64   // Maze scale factor
 }
 
 // newSentinel creates a player enemy.
-func newSentinel(part vu.Pov, level, units int, fade float64) *sentinel {
+func newSentinel(part *vu.Pov, level, units int, fade float64) *sentinel {
 	s := &sentinel{}
 	s.part = part
 	s.units = float64(units)
-	s.part.SetLocation(0, 0.5, 0)
+	s.part.SetAt(0, 0.5, 0)
 	if level > 0 {
 		s.center = s.part.NewPov().SetScale(0.125, 0.125, 0.125)
-		m := s.center.NewModel("flata").LoadMesh("cube").LoadMat("tred")
+		m := s.center.NewModel("flata", "msh:cube", "mat:tred")
 		m.SetUniform("fd", fade)
 	}
 	s.model = part.NewPov()
-	m := s.model.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m := s.model.NewModel("flata", "msh:cube", "mat:tblue")
 	m.SetUniform("fd", fade)
 	return s
 }
@@ -51,7 +51,7 @@ func newSentinel(part vu.Pov, level, units int, fade float64) *sentinel {
 // then it gets a new spot to move to.
 func (s *sentinel) move(plan grid.Grid) {
 	speed := float64(25) // higher is slower
-	gamex, gamey, gamez := s.part.Location()
+	gamex, gamey, gamez := s.part.At()
 	inv := float64(1) / float64(s.units)
 	gridfx, gridfy := gamex*inv, -gamez*inv
 	atx := math.Abs(float64(gridfx-float64(s.next.x))) < 0.001
@@ -70,20 +70,20 @@ func (s *sentinel) move(plan grid.Grid) {
 			gridfy += float64(s.next.y-s.prev.y) / speed
 		}
 	}
-	s.part.SetLocation(gridfx*float64(s.units), gamey, -gridfy*float64(s.units))
+	s.part.SetAt(gridfx*float64(s.units), gamey, -gridfy*float64(s.units))
 }
 
-// setGridLocation puts the sentinel down at the given grid location.
-func (s *sentinel) setGridLocation(gridx, gridy int) {
+// setGridAt puts the sentinel down at the given grid location.
+func (s *sentinel) setGridAt(gridx, gridy int) {
 	s.prev = &gridSpot{gridx, gridy}
 	s.next = &gridSpot{gridx, gridy}
-	_, gamey, _ := s.part.Location()
+	_, gamey, _ := s.part.At()
 	gamex, gamez := toGame(gridx, gridy, s.units)
-	s.part.SetLocation(gamex, gamey, gamez)
+	s.part.SetAt(gamex, gamey, gamez)
 }
 
 // location gets the sentinels current location.
-func (s *sentinel) location() (x, y, z float64) { return s.part.Location() }
+func (s *sentinel) location() (x, y, z float64) { return s.part.At() }
 
 // setScale changes the sentinels size.
 func (s *sentinel) setScale(scale float64) { s.model.SetScale(scale, scale, scale) }

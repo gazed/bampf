@@ -16,15 +16,15 @@ import (
 // This includes the player, the sentinels, and the level map.
 type level struct {
 	mp        *bampf       // Main program.
-	root      vu.Pov       // Top of local transform hierarchy.
-	cam       vu.Camera    // Quick access to the scene camera.
+	root      *vu.Pov      // Top of local transform hierarchy.
+	cam       *vu.Camera   // Quick access to the scene camera.
 	hd        *hud         // 2D information display for the stage.
 	num       int          // Level number.
 	gcx, gcy  int          // Grid level center.
-	center    vu.Pov       // Center tile model.
-	walls     []vu.Pov     // Walls.
-	floor     vu.Pov       // Large invisible floor.
-	body      vu.Pov       // Physics body for the player.
+	center    *vu.Pov      // Center tile model.
+	walls     []*vu.Pov    // Walls.
+	floor     *vu.Pov      // Large invisible floor.
+	body      *vu.Pov      // Physics body for the player.
 	player    *trooper     // Player size/shape for this stage.
 	sentries  []*sentinel  // Sentinels: player enemy AI's.
 	cc        *coreControl // Controls dropping cores on a stage.
@@ -54,7 +54,7 @@ func newLevel(g *game, levelNum int) *level {
 	lvl.fov = 75
 	lvl.root = g.mp.eng.Root().NewPov()
 	lvl.cam = lvl.root.NewCam()
-	lvl.cam.SetCull(vu.NewFrontCull(g.vr))
+	lvl.cam.Cull = vu.NewFrontCull(g.vr)
 	lvl.cam.SetPerspective(lvl.fov, float64(g.ww)/float64(g.wh), 0.1, 50)
 
 	// save everything as one game stage.
@@ -68,7 +68,7 @@ func newLevel(g *game, levelNum int) *level {
 	lvl.makeSentries(lvl.root, lvl.num)
 
 	// create one large floor.
-	lvl.floor = lvl.root.NewPov().SetLocation(0, 0.2, 0)
+	lvl.floor = lvl.root.NewPov().SetAt(0, 0.2, 0)
 
 	// create a new layout for the stage.
 	plan := levelType[lvl.num]
@@ -76,17 +76,17 @@ func newLevel(g *game, levelNum int) *level {
 	plan.Generate(levelSize, levelSize)
 
 	// build and populate the floorplan
-	lvl.walls = []vu.Pov{}
+	lvl.walls = []*vu.Pov{}
 	lvl.cc = newCoreControl(lvl.units, g.mp.ani)
 	lvl.buildFloorPlan(lvl.root, lvl.hd, plan)
 	lvl.plan = plan
 
 	// set the intial player location.
-	lvl.body = lvl.root.NewPov().SetLocation(4, 0.5, 10)
+	lvl.body = lvl.root.NewPov().SetAt(4, 0.5, 10)
 
 	// start sentinels at the center of the stage.
 	for _, sentry := range lvl.sentries {
-		sentry.setGridLocation(lvl.gcx, lvl.gcy)
+		sentry.setGridAt(lvl.gcx, lvl.gcy)
 	}
 	lvl.player.resetEnergy()
 	lvl.setVisible(false)
@@ -100,7 +100,7 @@ func (lvl *level) setHudVisible(isVisible bool) {
 
 // setVisible toggles the visibility of the entire level.
 func (lvl *level) setVisible(isVisible bool) {
-	lvl.root.SetVisible(isVisible)
+	lvl.root.Cull = !isVisible
 	lvl.hd.setVisible(isVisible)
 }
 
@@ -116,8 +116,8 @@ func (lvl *level) resize(width, height int) {
 func (lvl *level) update() {
 
 	// use the camera's orientation and the physics bodies location.
-	lvl.body.SetRotation(lvl.cam.Lookxz())
-	lvl.cam.SetLocation(lvl.body.Location())
+	lvl.body.SetView(lvl.cam.Look)
+	lvl.cam.SetAt(lvl.body.At())
 
 	// run animations and other regular checks.
 	lvl.setMist()
@@ -141,8 +141,8 @@ func (lvl *level) updateKeys(keys []int) {
 // The background colour becomes darker the deeper into the maze
 // and the greater the level.
 func (lvl *level) setMist() {
-	px, _, pz := lvl.cam.Location()
-	cx, _, cz := lvl.center.Location()
+	px, _, pz := lvl.cam.At()
+	cx, _, cz := lvl.center.At()
 	dx, dz := float64(px-cx), float64(pz-cz)
 	dist := math.Sqrt(dx*dx + dz*dz)
 	dx, dz = float64(cx), float64(cz)
@@ -160,7 +160,7 @@ func (lvl *level) setMist() {
 
 // setBackgroundColour uses colour to form a gray based background.
 func (lvl *level) setBackgroundColour(colour float32) {
-	lvl.mp.eng.SetColor(colour, colour, colour, 1)
+	lvl.mp.eng.Set(vu.Color(colour, colour, colour, 1))
 }
 
 // isPlayerWorthy returns true if the player is able to ascend
@@ -193,7 +193,7 @@ func (lvl *level) activate(hm healthMonitor) {
 	lvl.hd.setLevel(lvl)
 
 	// reset the camera each time, so it is in a known position.
-	lvl.cam.SetLocation(4, 0.5, 10)
+	lvl.cam.SetAt(4, 0.5, 10)
 	lvl.player.resetEnergy()
 
 	// ensure the walls and floor are added to the physics simulation.
@@ -204,7 +204,7 @@ func (lvl *level) activate(hm healthMonitor) {
 	}
 	lvl.floor.NewBody(vu.NewBox(100, 25, 100))
 	lvl.floor.SetSolid(0, 0.4)
-	lvl.floor.SetLocation(0, -25, 0)
+	lvl.floor.SetAt(0, -25, 0)
 
 	// add a physics body for the camera.
 	lvl.body.NewBody(vu.NewSphere(0.25))
@@ -217,7 +217,7 @@ func (lvl *level) wallTextureLabel(band int) string { return fmt.Sprintf("wall%d
 func (lvl *level) tileLabel(band int) string        { return fmt.Sprintf("tile%d0", band) }
 
 // buildFloorPlan creates the level layout.
-func (lvl *level) buildFloorPlan(root vu.Pov, hd *hud, plan grid.Grid) {
+func (lvl *level) buildFloorPlan(root *vu.Pov, hd *hud, plan grid.Grid) {
 	width, height := plan.Size()
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
@@ -226,8 +226,8 @@ func (lvl *level) buildFloorPlan(root vu.Pov, hd *hud, plan grid.Grid) {
 			band := plan.Band(x, y) / 3
 			if x == width/2 && y == height/2 {
 				lvl.gcx, lvl.gcy = x, y // remember the maze center location
-				lvl.center = root.NewPov().SetLocation(xc, 0, yc)
-				m := lvl.center.NewModel("uvra").LoadMesh("tile").AddTex("drop1")
+				lvl.center = root.NewPov().SetAt(xc, 0, yc)
+				m := lvl.center.NewModel("uvra", "msh:tile", "tex:drop1")
 				m.SetAlpha(0.7)
 				m.SetUniform("spin", 1.0)
 				m.SetUniform("fd", lvl.fade)
@@ -235,20 +235,20 @@ func (lvl *level) buildFloorPlan(root vu.Pov, hd *hud, plan grid.Grid) {
 
 				// the floor tiles.
 				tileLabel := lvl.tileLabel(band)
-				tile := root.NewPov().SetLocation(xc, 0, yc)
-				m := tile.NewModel("uva").LoadMesh("tile").AddTex(tileLabel)
+				tile := root.NewPov().SetAt(xc, 0, yc)
+				m := tile.NewModel("uva", "msh:tile", "tex:"+tileLabel)
 				m.SetAlpha(0.7)
 				m.SetUniform("fd", lvl.fade)
 
 				// remember the tile locations for drop spots inside the maze.
-				lvl.cc.addDropLocation(x, y)
+				lvl.cc.addDropAt(x, y)
 			} else {
 
 				// draw flat on the y plane with the maze extending into the screen.
 				wm := lvl.wallMeshLabel(band)
 				wt := lvl.wallTextureLabel(band)
-				wall := root.NewPov().SetLocation(xc, 0, yc)
-				m := wall.NewModel("uva").LoadMesh(wm).AddTex(wt)
+				wall := root.NewPov().SetAt(xc, 0, yc)
+				m := wall.NewModel("uva", "msh:"+wm, "tex:"+wt)
 				m.SetUniform("fd", lvl.fade)
 				lvl.walls = append(lvl.walls, wall)
 
@@ -260,18 +260,18 @@ func (lvl *level) buildFloorPlan(root vu.Pov, hd *hud, plan grid.Grid) {
 
 	// add core drop locations around the outside of the maze.
 	for x := -1; x < width+1; x++ {
-		lvl.cc.addDropLocation(x, -1)
-		lvl.cc.addDropLocation(x, height)
+		lvl.cc.addDropAt(x, -1)
+		lvl.cc.addDropAt(x, height)
 	}
 	for y := 0; y < height; y++ {
-		lvl.cc.addDropLocation(-1, y)
-		lvl.cc.addDropLocation(width, y)
+		lvl.cc.addDropAt(-1, y)
+		lvl.cc.addDropAt(width, y)
 	}
 }
 
 // makePlayer: the player is the camera... the player-trooper is used by the hud
 // to show player status and as such this trooper is part of the hud scene.
-func (lvl *level) makePlayer(root vu.Pov, levelNum int) *trooper {
+func (lvl *level) makePlayer(root *vu.Pov, levelNum int) *trooper {
 	player := newTrooper(root.NewPov(), levelNum)
 	player.part.Spin(15, 0, 0)
 	player.part.Spin(0, 15, 0)
@@ -281,7 +281,7 @@ func (lvl *level) makePlayer(root vu.Pov, levelNum int) *trooper {
 }
 
 // makeSentries creates some AI sentinels.
-func (lvl *level) makeSentries(root vu.Pov, levelNum int) {
+func (lvl *level) makeSentries(root *vu.Pov, levelNum int) {
 	sentinels := []*sentinel{}
 	numSentinels := gameMuster[levelNum]
 	for cnt := 0; cnt < numSentinels; cnt++ {
@@ -306,7 +306,7 @@ func (lvl *level) collideSentinels() {
 	if lvl.player.cloaked {
 		return // player is immume from sentries.
 	}
-	x, y, z := lvl.cam.Location()
+	x, y, z := lvl.cam.At()
 	pgx, pgy := toGrid(x, y, z, float64(lvl.units))
 	for _, sentry := range lvl.sentries {
 		sx, sy, sz := sentry.location()
@@ -317,9 +317,9 @@ func (lvl *level) collideSentinels() {
 			// teleport the sentinel to the outside of the maze so that the
 			// collision doesn't happen again.
 			safex, safey := lvl.plan.Size() // top right corner.
-			sentry.setGridLocation(safex, safey)
+			sentry.setGridAt(safex, safey)
 			if pgx == safex && pgy == safey {
-				sentry.setGridLocation(-1, -1) // bottom left corner.
+				sentry.setGridAt(-1, -1) // bottom left corner.
 			}
 
 			// remove health from the player and show the energy loss animation.
@@ -332,7 +332,7 @@ func (lvl *level) collideSentinels() {
 // fetchCores picks up any nearby free cores if the core is in the
 // same grid element as the player. No need to check for actual collision.
 func (lvl *level) fetchCores() {
-	px, _, pz := lvl.cam.Location()
+	px, _, pz := lvl.cam.At()
 	coreIndex := lvl.cc.hitCore(px, pz)
 
 	// attach the core to the player.
@@ -372,9 +372,9 @@ func (lvl *level) createCore() {
 func (lvl *level) teleport() {
 	if lvl.player.teleport() {
 		lvl.body.Dispose(vu.PovBody)
-		lvl.body.SetLocation(0, 0.5, 10)
-		lvl.body.SetRotation(lin.QI)
-		lvl.cam.SetLocation(0, 0.5, 10)
+		lvl.body.SetAt(0, 0.5, 10)
+		lvl.body.SetView(lin.QI)
+		lvl.cam.SetAt(0, 0.5, 10)
 		lvl.body.NewBody(vu.NewSphere(0.25))
 		lvl.body.SetSolid(1, 0)
 		lvl.mp.ani.addAnimation(lvl.newTeleportAnimation())

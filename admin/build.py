@@ -1,25 +1,31 @@
 #! /usr/bin/python
 # Copyright (c) 2013-2016 Galvanized Logic Inc.
+# Use is governed by a BSD-style license found in the LICENSE file.
 
 """
 The build and distribution script for the Bampf project.
 Expected to be run from this directory.
 All build output placed in a local 'target' directory
 
-This script detects and builds for the platform that it is on.
-All the build knowledge for any computer architecture is contained
-in this script. Note that build commands are specified in such
-a way that they can be easily copied and tested in a shell.
+This script detects and builds for the platform that it is on.  All the build
+knowledge for any computer architecture is contained in this script.
+Note that build commands are specified in such a way that they can be easily
+copied and tested in a shell.
+
+This script is expected to be called by:
+   1) a continuous integration script from a dedicated build server, or,
+   2) a local developer testing the build.
 """
 
 import sys          # detect which arch for the build
 import os           # for directory manipulation
+import signal       # for process signal definitions.
 import shutil       # for directory and file manipulation
 import shlex        # run and control shell commands
 import subprocess   # for calling shell commands
 import glob         # for unix pattern matching
 
-def clean():
+def cleanProject():
     # Remove all generated files.
     generatedOutput = ['target']
     print 'Removing generated output:'
@@ -28,12 +34,14 @@ def clean():
             print '    ' + gdir
             shutil.rmtree(gdir)
 
-def buildSrc():
+def lintProject():
+    # expects golint executable in $PATH
+    subprocess.call(shlex.split('golint bampf'))
+
+def buildProject():
     # Builds executable.
     if sys.platform.startswith('darwin'):
         buildOSX()
-    elif sys.platform.startswith('linux'):
-        buildLinux()
     elif sys.platform.startswith('win'):
         buildWindows()
     else:
@@ -81,11 +89,26 @@ def buildOSX():
     subprocess.call(shlex.split('cp target/resources.zip target/Bampf.app/Contents/Resources/'))
     subprocess.call(shlex.split('cp bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns'))
 
+    # Create a signed copy for self distribution.
+    if os.path.exists('target/dist'):
+        shutil.rmtree('target/dist')
+    os.makedirs('target/dist')
+    subprocess.call(shlex.split('cp -r target/Bampf.app target/dist/Bampf.app'))
+    signOsx('target/dist', '"Developer ID Application: XXX"', '"Developer ID Installer: Paul Ruest"')
+
     # Create a signed copy for app store submission.
     if os.path.exists('target/app'):
         shutil.rmtree('target/app')
     os.makedirs('target/app')
     subprocess.call(shlex.split('cp -r target/Bampf.app target/app/Bampf.app'))
+    signOsx('target/app', '"3rd Party Mac Developer Application: Galvanized Logic Inc."',
+           '"3rd Party Mac Developer Installer: Galvanized Logic Inc."')
+
+def signOsx(outdir, akey, ikey):
+    subprocess.call(shlex.split('codesign --force --entitlements Entitlements.plist --sign '+
+        akey+' --timestamp=none '+outdir+'/Bampf.app'))
+    subprocess.call(shlex.split('productbuild --version 1.0 --sign '+ikey+' --component '+
+        outdir+'/Bampf.app /Applications '+outdir+'/Bampf.pkg'))
 
 def buildWindows():
     print 'Building windows'
@@ -104,18 +127,16 @@ def buildWindows():
     subprocess.call(shlex.split('zip -A target/bampf'))
     subprocess.call(shlex.split('mv target/bampf target/Bampf.exe'))
 
-def buildLinux():
-    print 'TODO Building linux'
-
 #------------------------------------------------------------------------------
 # Main program.
 
 def usage():
-    print 'Usage: build [clean] [src]'
+    print 'Usage: build [clean] [lint] [src]'
 
 if __name__ == "__main__":
-    options = {'clean'  : clean,
-               'src'    : buildSrc}
+    options = {'clean'  : cleanProject,
+               'lint'   : lintProject,
+               'src'    : buildProject}
     somethingBuilt = False
     for arg in sys.argv:
         if arg in options:

@@ -43,7 +43,7 @@ func (g *game) processDebugInput(in *vu.Input) {
 func (g *game) toggleFly() {
 	g.fly = !g.fly
 	if g.fly {
-		g.last.lx, g.last.ly, g.last.lz = g.cl.cam.Location()
+		g.last.lx, g.last.ly, g.last.lz = g.cl.cam.At()
 		g.last.pitch = g.cl.cam.Pitch()
 		g.last.yaw = g.cl.cam.Yaw()
 		g.cl.body.Dispose(vu.BODY)
@@ -53,8 +53,8 @@ func (g *game) toggleFly() {
 		g.lens.yaw = g.last.yaw
 		g.cl.cam.SetPitch(g.last.pitch)
 		g.cl.cam.SetYaw(g.last.yaw)
-		g.cl.cam.SetLocation(g.last.lx, g.last.ly, g.last.lz)
-		g.cl.body.SetLocation(g.last.lx, g.last.ly, g.last.lz)
+		g.cl.cam.SetAt(g.last.lx, g.last.ly, g.last.lz)
+		g.cl.body.SetAt(g.last.lx, g.last.ly, g.last.lz)
 		g.cl.body.SetRotation(g.cl.cam.Lookat())
 		g.cl.body.NewBody(vu.NewSphere(0.25))
 		g.cl.body.SetSolid(1, 0)

@@ -43,16 +43,16 @@ func (g *game) resize(width, height int) { g.handleResize(width, height) }
 func (g *game) activate(state int) {
 	switch state {
 	case screenActive:
-		g.mp.eng.ShowCursor(false)
+		g.mp.eng.Set(vu.CursorOn(false))
 		g.cl.setVisible(true)
 		g.setKeys(g.keys)
 		g.evolving = false
 	case screenDeactive:
-		g.mp.eng.ShowCursor(true)
+		g.mp.eng.Set(vu.CursorOn(true))
 		g.cl.setVisible(false)
 		g.evolving = false
 	case screenPaused:
-		g.mp.eng.ShowCursor(true)
+		g.mp.eng.Set(vu.CursorOn(true))
 	case screenEvolving:
 		g.evolving = true
 	}
@@ -198,7 +198,7 @@ func (g *game) spinView(mx, my int, dt float64) {
 func (g *game) centerMouse(mx, my int) {
 	cx, cy := g.ww/2, g.wh/2
 	if math.Abs(float64(cx-mx)) > 200 || math.Abs(float64(cy-my)) > 200 {
-		g.mp.eng.SetCursorAt(g.ww/2, g.wh/2)
+		g.mp.eng.Set(vu.CursorAt(g.ww/2, g.wh/2))
 		g.mxp, g.myp = cx, cy
 	}
 }
@@ -208,8 +208,8 @@ func (g *game) centerMouse(mx, my int) {
 // forever, but they can then return to the center in very little time.
 func (g *game) limitWandering(down int) {
 	maxd := g.vr * 3                           // max allowed distance from center
-	cx, _, cz := g.cl.center.Location()        // center location
-	x, y, z := g.cl.body.Location()            // player location
+	cx, _, cz := g.cl.center.At()              // center location
+	x, y, z := g.cl.body.At()                  // player location
 	toc := &lin.V3{X: x - cx, Y: y, Z: z - cz} // vector to center
 	dtoc := toc.Len()                          // distance to center
 	if dtoc > maxd {
@@ -251,7 +251,7 @@ func (g *game) goRight(dt float64, down int) {
 // of the level. This is the trigger to complete the level.
 func (g *game) evolveCheck(eventq *list.List) {
 	if g.cl.isPlayerWorthy() {
-		x, y, z := g.cl.cam.Location()
+		x, y, z := g.cl.cam.At()
 		gridx, gridy := toGrid(x, y, z, float64(g.cl.units))
 		if gridx == g.cl.gcx && gridy == g.cl.gcy {
 			if g.cl.num < 4 {
@@ -304,7 +304,7 @@ func (g *game) setLevel(lvl int) {
 	g.lens.reset(g.cl.cam)
 	g.cl.activate(g)
 	g.cl.updateKeys(g.keys)
-	g.dir = g.cl.cam.Lookxz()
+	g.dir = g.cl.cam.Look
 }
 
 // newStartGameAnimation descends to the initial level from
@@ -333,7 +333,7 @@ func (g *game) switchLevel(fo, fi *fadeLevelAnimation) {
 	g.cl.setBackgroundColour(1)
 	g.cl.center.SetScale(1, 1, 1)
 	m := g.cl.center.Model()
-	m.SetTex(0, "drop1")
+	m.LoadTex(0, "drop1")
 	m.SetUniform("spin", 1.0)
 
 	// switch to the new level.
@@ -380,7 +380,7 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 			//   location goes up from 0 to g.vr.
 			f.tiltA, f.tiltB = 0.0, float64(75*f.dir)
 			f.distA, f.distB = 0.0, float64(f.dir)*-g.vr
-			x, _, z = g.cl.cam.Location() // start from player location.
+			x, _, z = g.cl.cam.At() // start from player location.
 		} else {
 
 			// fading in:
@@ -395,7 +395,7 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 		}
 
 		g.lens.pitch = f.tiltA
-		g.cl.cam.SetLocation(x, f.distA, z)
+		g.cl.cam.SetAt(x, f.distA, z)
 		f.colr = (float32(1) - g.cl.colour) / float32(f.ticks)
 		g.cl.setVisible(true)
 		g.cl.setHudVisible(false)
@@ -429,12 +429,12 @@ func (f *fadeLevelAnimation) Wrap() {
 	g.cl.setHudVisible(true)
 	g.cl.body.NewBody(vu.NewSphere(0.25))
 	g.cl.body.SetSolid(1, 0)
-	x, _, z := g.cl.cam.Location()
-	g.cl.cam.SetLocation(x, 0.5, z)
+	x, _, z := g.cl.cam.At()
+	g.cl.cam.SetAt(x, 0.5, z)
 	g.lens.pitch = 0
 	g.cl.cam.SetPitch(g.lens.pitch)
-	g.cl.body.SetLocation(x, 0.5, z)
-	g.cl.body.SetRotation(lin.QI)
+	g.cl.body.SetAt(x, 0.5, z)
+	g.cl.body.SetView(lin.QI)
 
 	// set the new game state if appropriate.
 	if f.gameState == screenDeactive || f.gameState == screenActive {

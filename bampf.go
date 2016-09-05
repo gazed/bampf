@@ -91,7 +91,7 @@ func (mp *bampf) Create(eng vu.Eng, s *vu.State) {
 	mp.state = mp.choosing
 	mp.active = mp.launch
 	mp.active.activate(screenActive)
-	eng.SetColor(1, 1, 1, 1) // White as default background.
+	eng.Set(vu.Color(1, 1, 1, 1)) // White as default background.
 }
 
 // Update is a regular engine callback and is passed onto the currently
@@ -300,7 +300,7 @@ func (mp *bampf) setMute(mute bool) {
 	mp.mute = mute
 	saver := newSaver()
 	saver.persistMute(mp.mute)
-	mp.eng.Mute(mp.mute)
+	mp.eng.Set(vu.Mute(mp.mute))
 }
 
 // bampf

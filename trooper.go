@@ -18,12 +18,12 @@ import (
 //
 // trooper works with single cubes (cells) of size 2 centered at the origin.
 type trooper struct {
-	part   vu.Pov   // Graphics container.
+	part   *vu.Pov  // Graphics container.
 	lvl    int      // Current game level of trooper.
-	neo    vu.Pov   // Un-injured trooper
+	neo    *vu.Pov  // Un-injured trooper
 	bits   []box    // Injured troopers have panels and edge cubes.
 	ipos   []int    // Remember the initial positions for resets.
-	center vu.Pov   // Center always represented as one piece
+	center *vu.Pov  // Center always represented as one piece
 	mid    int      // Level entry number of cells.
 	noise  vu.Noise // Trooper sounds.
 
@@ -43,7 +43,7 @@ type trooper struct {
 //    level 2: 3x3x3 : 20 edge cubes + 6 panels of 1x1 cubes + 1x1x1 center.
 //    level 3: 4x4x4 : 32 edge cubes + 6 panels of 2x2 cubes + 2x2x2 center.
 //    ...
-func newTrooper(part vu.Pov, level int) *trooper {
+func newTrooper(part *vu.Pov, level int) *trooper {
 	tr := &trooper{}
 	tr.lvl = level
 	tr.part = part
@@ -160,8 +160,8 @@ func (tr *trooper) fullHealth() bool { return tr.neo != nil }
 func (tr *trooper) setScale(scale float64) { tr.part.SetScale(scale, scale, scale) }
 
 // loc gets the troopers current location.
-func (tr *trooper) loc() (x, y, z float64) { return tr.part.Location() }
-func (tr *trooper) setLoc(x, y, z float64) { tr.part.SetLocation(x, y, z) }
+func (tr *trooper) loc() (x, y, z float64) { return tr.part.At() }
+func (tr *trooper) setLoc(x, y, z float64) { tr.part.SetAt(x, y, z) }
 
 // addCenter creates the interior center of the trooper which is a single cube
 // the size of the previous level. This will be nothing on the first level.
@@ -170,7 +170,7 @@ func (tr *trooper) addCenter() {
 		cubeSize := 1.0 / float64(tr.lvl+1)
 		scale := float64(tr.lvl-1) * cubeSize * 0.45 // leave a gap.
 		tr.center = tr.part.NewPov().SetScale(scale, scale, scale)
-		m := tr.center.NewModel("flata").LoadMesh("cube").LoadMat("tred")
+		m := tr.center.NewModel("flata", "msh:cube", "mat:tred")
 		m.SetUniform("fd", 1000)
 	}
 }
@@ -246,7 +246,7 @@ func (tr *trooper) detachCores(loss int) {
 func (tr *trooper) merge() {
 	tr.trash()
 	tr.neo = tr.part.NewPov().SetScale(0.5, 0.5, 0.5)
-	m := tr.neo.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m := tr.neo.NewModel("flata", "msh:cube", "mat:tblue")
 	m.SetUniform("fd", 1000)
 	tr.addCenter()
 }
@@ -427,16 +427,16 @@ func (c *cbox) box() *cbox { return c }
 // panel groups 0 or more cubes into the center of one of the troopers
 // six sides.
 type panel struct {
-	part  vu.Pov  // Each panel needs its own part.
+	part  *vu.Pov // Each panel needs its own part.
 	lvl   int     // Used to scale slab.
-	slab  vu.Pov  // Un-injured panel is a single piece.
+	slab  *vu.Pov // Un-injured panel is a single piece.
 	cubes []*cube // An injured panel is made of cubes.
 	cbox
 }
 
 // newPanel creates a panel with no cubes. The cubes are added later using
 // panel.addCube().
-func newPanel(part vu.Pov, x, y, z float64, level int) *panel {
+func newPanel(part *vu.Pov, x, y, z float64, level int) *panel {
 	p := &panel{}
 	p.part = part.NewPov()
 	p.lvl = level
@@ -495,7 +495,7 @@ func (p *panel) removeCell() {
 func (p *panel) merge() {
 	p.trash()
 	size := p.csize * 0.5
-	p.slab = p.part.NewPov().SetLocation(p.cx, p.cy, p.cz)
+	p.slab = p.part.NewPov().SetAt(p.cx, p.cy, p.cz)
 	scale := float64(p.lvl-1) * size
 	if (p.cx > p.cy && p.cx > p.cz) || (p.cx < p.cy && p.cx < p.cz) {
 		p.slab.SetScale(size, scale, scale)
@@ -504,7 +504,7 @@ func (p *panel) merge() {
 	} else if (p.cz > p.cx && p.cz > p.cy) || (p.cz < p.cx && p.cz < p.cy) {
 		p.slab.SetScale(scale, scale, size)
 	}
-	m := p.slab.NewModel("flata").LoadMesh("cube").LoadMat("tblue")
+	m := p.slab.NewModel("flata", "msh:cube", "mat:tblue")
 	m.SetUniform("fd", 1000)
 }
 
@@ -529,18 +529,18 @@ func (p *panel) trash() {
 // as to their current number of cells which is between 0 (nothing visible),
 // 1-7 (partial) and 8 (merged).
 type cube struct {
-	part    vu.Pov   // For the merged cube.
-	cells   []vu.Pov // Max 8 cells per cube.
-	centers csort    // Precalculated center location of each cell.
+	part    *vu.Pov   // For the merged cube.
+	cells   []*vu.Pov // Max 8 cells per cube.
+	centers csort     // Precalculated center location of each cell.
 	cbox
 }
 
 // newCube's are often started with cube size of 1 corner, 2 edges,
 // or 4 bottom side pieces.
-func newCube(part vu.Pov, x, y, z, cubeSize float64) *cube {
+func newCube(part *vu.Pov, x, y, z, cubeSize float64) *cube {
 	c := &cube{}
 	c.part = part.NewPov()
-	c.cells = []vu.Pov{}
+	c.cells = []*vu.Pov{}
 	c.cx, c.cy, c.cz, c.csize = x, y, z, cubeSize
 	c.ccnt, c.cmax = 0, 8
 	c.mergec = func() { c.merge() }
@@ -581,10 +581,10 @@ func (c *cube) panelSort(rx, ry, rz float64, startCount int) {
 // addCell creates and adds a new cell to the cube.
 func (c *cube) addCell() {
 	center := c.centers[c.ccnt-1]
-	cell := c.part.NewPov().SetLocation(center.X, center.Y, center.Z)
+	cell := c.part.NewPov().SetAt(center.X, center.Y, center.Z)
 	scale := c.csize * 0.20 // leave a gap (0.25 for no gap).
 	cell.SetScale(scale, scale, scale)
-	m := cell.NewModel("flata").LoadMesh("cube").LoadMat("tgreen")
+	m := cell.NewModel("flata", "msh:cube", "mat:tgreen")
 	m.SetUniform("fd", 1000)
 	c.cells = append(c.cells, cell)
 }
@@ -602,8 +602,8 @@ func (c *cube) removeCell() {
 // merge is called.
 func (c *cube) merge() {
 	c.trash()
-	cell := c.part.NewPov().SetLocation(c.cx, c.cy, c.cz)
-	m := cell.NewModel("flata").LoadMesh("cube").LoadMat("tgreen")
+	cell := c.part.NewPov().SetAt(c.cx, c.cy, c.cz)
+	m := cell.NewModel("flata", "msh:cube", "mat:tgreen")
 	m.SetUniform("fd", 1000)
 	scale := (c.csize - (c.csize * 0.15)) * 0.5 // leave a gap (just c.csize for no gap)
 	cell.SetScale(scale, scale, scale)

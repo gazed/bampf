@@ -16,22 +16,22 @@ import (
 //     game screen  : allows the user to map keys or quit the level.
 //     end screen   : allows the user to map keys or return to the start screen.
 type config struct {
-	area                     // Options fills up the full screen.
-	keys           []int     // Rebindable keys.
-	keysRebound    bool      // True if keys were changed.
-	cam            vu.Camera // Camera created at init.
-	mp             *bampf    // Main program.
-	root           vu.Pov    // Top of transform hierarchy for this screen.
-	bg             vu.Pov    // Gray out the screen when options are up.
-	buttonGroup    vu.Pov    // Part to group buttons.
-	buttons        []*button // Option buttons.
-	buttonSize     int       // Width and height of each button.
-	restart        *button   // Quit level button.
-	back           *button   // Back to game button.
-	info           *button   // Info/credits button.
-	mute           *button   // Mute toggle.
-	creditList     []vu.Pov  // The info model.
-	exitTransition int       // Transition to use when exiting config.
+	area                      // Options fills up the full screen.
+	keys           []int      // Rebindable keys.
+	keysRebound    bool       // True if keys were changed.
+	cam            *vu.Camera // Camera created at init.
+	mp             *bampf     // Main program.
+	root           *vu.Pov    // Top of transform hierarchy for this screen.
+	bg             *vu.Pov    // Gray out the screen when options are up.
+	buttonGroup    *vu.Pov    // Part to group buttons.
+	buttons        []*button  // Option buttons.
+	buttonSize     int        // Width and height of each button.
+	restart        *button    // Quit level button.
+	back           *button    // Back to game button.
+	info           *button    // Info/credits button.
+	mute           *button    // Mute toggle.
+	creditList     []*vu.Pov  // The info model.
+	exitTransition int        // Transition to use when exiting config.
 }
 
 // options implements the screen interface.
@@ -42,10 +42,10 @@ func (c *config) activate(state int) {
 	switch state {
 	case screenActive:
 		c.keysRebound = false
-		c.root.SetVisible(true)
+		c.root.Cull = false
 		c.cam.SetLast(1) // sort bucket is OVERLAY + 1
 	case screenDeactive:
-		c.root.SetVisible(false)
+		c.root.Cull = true
 	default:
 		logf("config state error")
 	}
@@ -120,12 +120,11 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.mp = mp
 	c.buttonSize = 64
 	c.root = mp.eng.Root().NewPov()
-	c.cam = c.root.NewCam()
-	c.cam.SetUI()
+	c.cam = c.root.NewCam().SetUI()
 	c.handleResize(ww, wh)
-	c.bg = c.root.NewPov().SetLocation(float64(c.cx), float64(c.cy), 0)
+	c.bg = c.root.NewPov().SetAt(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
-	c.bg.NewModel("alpha").LoadMesh("square").LoadMat("tblack")
+	c.bg.NewModel("alpha", "msh:square", "mat:tblack")
 	c.keys = []int{ // rebindable key defaults.
 		vu.KW, // forwards
 		vu.KS, // backwards
@@ -157,7 +156,7 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.back.position(float64(c.w-20-c.back.w/2), 20) // bottom right corner
 	c.restart = newButton(c.buttonGroup, sz/2, "quit", quitLevel, nil)
 	c.restart.position(float64(c.cx), 20) // bottom center of screen.
-	c.root.SetVisible(false)
+	c.root.Cull = true
 	return c
 }
 
@@ -168,7 +167,7 @@ func (c *config) handleResize(width, height int) {
 	c.cx, c.cy = c.center()
 	if c.bg != nil {
 		c.bg.SetScale(float64(c.w), float64(c.h), 1)
-		c.bg.SetLocation(float64(c.cx), float64(c.cy), 0)
+		c.bg.SetAt(float64(c.cx), float64(c.cy), 0)
 	}
 	c.layout()
 }
@@ -273,18 +272,17 @@ func (c *config) rollCredits() {
 	info := "Bampf " + version
 	credits = append(credits, info)
 	if c.creditList == nil {
-		c.creditList = []vu.Pov{}
-		tex := "lucidiaSu18White"
+		c.creditList = []*vu.Pov{}
 		height := float64(45)
 		for _, credit := range credits {
-			banner := c.root.NewPov().SetLocation(20, height, 0)
-			banner.NewModel("uv").AddTex(tex).LoadFont("lucidiaSu18").SetPhrase(credit)
+			banner := c.root.NewPov().SetAt(20, height, 0)
+			banner.NewLabel("uv", "lucidiaSu18", "lucidiaSu18White").SetStr(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}
 	} else {
 		for _, banner := range c.creditList {
-			banner.SetVisible(!banner.Visible())
+			banner.Cull = !banner.Cull
 		}
 	}
 }

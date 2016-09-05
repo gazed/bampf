@@ -17,15 +17,15 @@ type cam struct {
 }
 
 // implement the rest of the lens interface.
-func (c *cam) back(bod vu.Pov, dt, run float64, q *lin.Q)    { c.move(bod, 0, 0, dt*run, q) }
-func (c *cam) forward(bod vu.Pov, dt, run float64, q *lin.Q) { c.move(bod, 0, 0, dt*-run, q) }
-func (c *cam) left(bod vu.Pov, dt, run float64, q *lin.Q)    { c.move(bod, dt*-run, 0, 0, q) }
-func (c *cam) right(bod vu.Pov, dt, run float64, q *lin.Q)   { c.move(bod, dt*run, 0, 0, q) }
+func (c *cam) back(bod *vu.Pov, dt, run float64, q *lin.Q)    { c.move(bod, 0, 0, dt*run, q) }
+func (c *cam) forward(bod *vu.Pov, dt, run float64, q *lin.Q) { c.move(bod, 0, 0, dt*-run, q) }
+func (c *cam) left(bod *vu.Pov, dt, run float64, q *lin.Q)    { c.move(bod, dt*-run, 0, 0, q) }
+func (c *cam) right(bod *vu.Pov, dt, run float64, q *lin.Q)   { c.move(bod, dt*run, 0, 0, q) }
 
 // Handle movement assuming there is a physics body associated with the camera.
 // This attempts to smooth out movement by adding a higher initial velocity push
 // and then capping movement once max accelleration is reached.
-func (c *cam) move(bod vu.Pov, x, y, z float64, dir *lin.Q) {
+func (c *cam) move(bod *vu.Pov, x, y, z float64, dir *lin.Q) {
 	if body := bod.Body(); body != nil {
 		boost := 40.0    // kick into high gear from stop.
 		maxAccel := 10.0 // limit accelleration.
@@ -94,20 +94,20 @@ func (c *cam) updatePitch(pitch, ydiff, spin, dt float64) float64 {
 }
 
 // reset puts the target pitch and yaw back to zero.
-func (c *cam) reset(camera vu.Camera) {
+func (c *cam) reset(camera *vu.Camera) {
 	c.pitch, c.yaw = 0, 0
 	camera.SetPitch(0)
 	camera.SetYaw(0)
 }
 
-func (c *cam) update(camera vu.Camera) {
+func (c *cam) update(camera *vu.Camera) {
 	fraction := 0.25
-	pitch := camera.Pitch()
+	pitch := camera.Pitch
 	if !lin.Aeq(pitch, c.pitch) {
 		pitch = (c.pitch-pitch)*fraction + pitch
 		camera.SetPitch(pitch)
 	}
-	yaw := camera.Yaw()
+	yaw := camera.Yaw
 	if !lin.Aeq(yaw, c.yaw) {
 		yaw = (c.yaw-yaw)*fraction + yaw
 		camera.SetYaw(yaw)

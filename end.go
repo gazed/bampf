@@ -14,14 +14,14 @@ import (
 // a silicon atom. No one is expected to get here based on the current game
 // difficulty settings.
 type end struct {
-	root     vu.Pov
-	cam      vu.Camera   // Scene camera.
-	bg       vu.Pov      // Background.
-	atom     vu.Pov      // Group the animated atom.
-	e1       vu.Pov      // Up/down electron group.
-	e2       vu.Pov      // Left/right electron group.
-	e3       vu.Pov      // Slash electron group.
-	e4       vu.Pov      // Backslash electron group.
+	root     *vu.Pov
+	cam      *vu.Camera  // Scene camera.
+	bg       *vu.Pov     // Background.
+	atom     *vu.Pov     // Group the animated atom.
+	e1       *vu.Pov     // Up/down electron group.
+	e2       *vu.Pov     // Left/right electron group.
+	e3       *vu.Pov     // Slash electron group.
+	e4       *vu.Pov     // Backslash electron group.
 	eles     []*electron // All electrons.
 	scale    float64     // Used for the fade in animation.
 	fov      float64     // Field of view.
@@ -35,13 +35,13 @@ func (e *end) resize(width, height int) { e.handleResize(width, height) }
 func (e *end) activate(state int) {
 	switch state {
 	case screenActive:
-		e.root.SetVisible(true)
+		e.root.Cull = false
 		e.evolving = false
 	case screenDeactive:
-		e.root.SetVisible(false)
+		e.root.Cull = true
 		e.evolving = false
 	case screenEvolving:
-		e.root.SetVisible(true)
+		e.root.Cull = false
 		e.evolving = true
 	default:
 		logf("end state error")
@@ -78,14 +78,14 @@ func newEndScreen(mp *bampf, ww, wh int) *end {
 	e.scale = 0.01
 	e.fov = 75
 	e.root = mp.eng.Root().NewPov()
-	e.root.SetVisible(false)
+	e.root.Cull = true
 	e.cam = e.root.NewCam()
-	e.cam.SetLocation(0, 0, 10)
+	e.cam.SetAt(0, 0, 10)
 	e.cam.SetPerspective(e.fov, float64(ww)/float64(wh), 0.1, 50)
 
 	// use a filter effect for the background.
-	e.bg = e.root.NewPov().SetScale(100, 100, 1).SetLocation(0, 0, -10)
-	m := e.bg.NewModel("wave").LoadMesh("square").LoadMat("solid")
+	e.bg = e.root.NewPov().SetScale(100, 100, 1).SetAt(0, 0, -10)
+	m := e.bg.NewModel("wave", "msh:square", "mat:solid")
 	m.SetUniform("screen", 500, 500)
 
 	// create the atom and its electrons.
@@ -110,12 +110,12 @@ func (e *end) handleResize(width, height int) {
 
 // create the silicon atom.
 func (e *end) newAtom() {
-	e.atom = e.root.NewPov().SetScale(e.scale, e.scale, e.scale).SetLocation(0, 0, 0)
+	e.atom = e.root.NewPov().SetScale(e.scale, e.scale, e.scale).SetAt(0, 0, 0)
 
 	// rotating image.
 	cimg := e.atom.NewPov().SetScale(2, 2, 2)
-	model := cimg.NewModel("spinball").LoadMesh("billboard")
-	model.AddTex("ele").AddTex("ele").AddTex("halo").AddTex("halo")
+	model := cimg.NewModel("spinball", "msh:billboard")
+	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
 	model.SetAlpha(0.6)
 
 	// create the electrons.
@@ -195,21 +195,21 @@ func (f *fadeEndAnimation) Wrap() {
 
 // electron is used for the atom electron model instances.
 type electron struct {
-	core vu.Pov // 3D model.
-	band int    // Electron band.
+	core *vu.Pov // 3D model.
+	band int     // Electron band.
 }
 
 // newElectron creates a new electron model.
-func newElectron(root vu.Pov, band int, angle float64) *electron {
+func newElectron(root *vu.Pov, band int, angle float64) *electron {
 	ele := &electron{}
 	ele.band = band
 	x, y := ele.initialLocation(angle)
-	ele.core = root.NewPov().SetLocation(x, y, 0)
+	ele.core = root.NewPov().SetAt(x, y, 0)
 
 	// rotating image.
 	cimg := ele.core.NewPov().SetScale(0.25, 0.25, 0.25)
-	model := cimg.NewModel("spinball").LoadMesh("billboard")
-	model.AddTex("ele").AddTex("ele").AddTex("halo").AddTex("halo")
+	model := cimg.NewModel("spinball", "msh:billboard")
+	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
 	model.SetAlpha(0.6)
 	return ele
 }
