@@ -51,7 +51,7 @@ func (b *button) setVisible(visible bool) { b.model.Cull = !visible }
 
 // setIcon changes the buttons icon.
 func (b *button) setIcon(icon string) {
-	b.icon.Model().LoadTex(0, icon)
+	b.icon.Model().OrderTex(icon, 0)
 }
 
 // clicked returns true if the button was clicked.

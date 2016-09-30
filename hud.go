@@ -191,7 +191,7 @@ func newXpbar(root *vu.Pov, screenWidth, screenHeight int) *xpbar {
 	xp.bg = root.NewPov()
 	xp.bg.NewModel("alpha", "msh:square", "mat:tblack")
 	xp.fg = root.NewPov()
-	xp.fg.NewModel("uv", "msh:icon", "tex:xpgreen")
+	xp.fg.NewModel("uv", "msh:icon", "tex:xpcyan", "tex:xpred")
 
 	// add the xp bar text.
 	xp.hb = root.NewPov()
@@ -201,7 +201,7 @@ func newXpbar(root *vu.Pov, screenWidth, screenHeight int) *xpbar {
 	xp.tbg = root.NewPov()
 	xp.tbg.NewModel("alpha", "msh:square", "mat:tblack")
 	xp.tfg = root.NewPov()
-	xp.tfg.NewModel("uv", "msh:icon", "tex:xpblue")
+	xp.tfg.NewModel("uv", "msh:icon", "tex:xpblue", "tex:xpred")
 
 	// the teleport bar text.
 	xp.tk = root.NewPov()
@@ -265,9 +265,9 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 	// turn on the warning colour if player has less than the starting amount of cores.
 	barMax := float64(xp.bw/2 - xp.linew)
 	if health >= warn {
-		xp.fg.Model().LoadTex(0, "xpcyan")
+		xp.fg.Model().OrderTex("xpcyan", 0)
 	} else {
-		xp.fg.Model().LoadTex(0, "xpred")
+		xp.fg.Model().OrderTex("xpred", 0)
 	}
 	healthBar := float64(health) / float64(high) * barMax
 	zeroSpot := float64(xp.border) + healthBar + float64(xp.linew-xp.border)
@@ -279,9 +279,9 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 func (xp *xpbar) energyUpdated(teleportEnergy, tmax, cloakEnergy, cmax int) {
 	tratio := float64(teleportEnergy) / float64(tmax)
 	if tratio == 1.0 {
-		xp.tfg.Model().LoadTex(0, "xpblue")
+		xp.tfg.Model().OrderTex("xpblue", 0)
 	} else {
-		xp.tfg.Model().LoadTex(0, "xpred")
+		xp.tfg.Model().OrderTex("xpred", 0)
 	}
 	xp.tfg.SetAt(xp.cx-float64(xp.w)/10, xp.cy+35, 0)
 	xp.tfg.SetScale((float64(xp.bw/10))*tratio, float64(xp.bh-xp.y)-7, 1)

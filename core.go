@@ -148,6 +148,7 @@ func (cc *coreControl) createCore(root *vu.Pov, fade float64) *vu.Pov {
 	core := root.NewPov().SetScale(0.25, 0.25, 0.25)
 	model := core.NewModel("spinball", "msh:billboard")
 	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
+	model.ClampTex("ele").ClampTex("halo")
 	model.SetAlpha(0.6)
 	model.SetUniform("fd", fade)
 	return core

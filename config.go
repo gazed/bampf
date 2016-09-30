@@ -7,6 +7,7 @@ import (
 	"container/list"
 
 	"github.com/gazed/vu"
+	"github.com/gazed/vu/render"
 )
 
 // config is an overlay screen that presents the game options while pausing
@@ -43,7 +44,9 @@ func (c *config) activate(state int) {
 	case screenActive:
 		c.keysRebound = false
 		c.root.Cull = false
-		c.cam.SetLast(1) // sort bucket is OVERLAY + 1
+
+		// Draw the config screen over other overlays.
+		c.cam.Overlay = render.Overlay + 1
 	case screenDeactive:
 		c.root.Cull = true
 	default:

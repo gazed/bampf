@@ -18,14 +18,13 @@ import (
 //
 // trooper works with single cubes (cells) of size 2 centered at the origin.
 type trooper struct {
-	part   *vu.Pov  // Graphics container.
-	lvl    int      // Current game level of trooper.
-	neo    *vu.Pov  // Un-injured trooper
-	bits   []box    // Injured troopers have panels and edge cubes.
-	ipos   []int    // Remember the initial positions for resets.
-	center *vu.Pov  // Center always represented as one piece
-	mid    int      // Level entry number of cells.
-	noise  vu.Noise // Trooper sounds.
+	part   *vu.Pov // Graphics container.
+	lvl    int     // Current game level of trooper.
+	neo    *vu.Pov // Un-injured trooper
+	bits   []box   // Injured troopers have panels and edge cubes.
+	ipos   []int   // Remember the initial positions for resets.
+	center *vu.Pov // Center always represented as one piece
+	mid    int     // Level entry number of cells.
 
 	// trooper special powers are cloaking and teleporting.
 	cloaked               bool // Is cloaking turned on.
@@ -132,12 +131,11 @@ func newTrooper(part *vu.Pov, level int) *trooper {
 	}
 
 	// create the noises the trooper can make.
-	tr.noise = part.NewNoise()
-	tr.noise.Add("teleport") // teleportSound
-	tr.noise.Add("fetch")    // fetchSound
-	tr.noise.Add("cloak")    // cloakSound
-	tr.noise.Add("decloak")  // decloakSound
-	tr.noise.Add("collide")  // collideSound
+	tr.part.AddSound("teleport") // teleportSound
+	tr.part.AddSound("fetch")    // fetchSound
+	tr.part.AddSound("cloak")    // cloakSound
+	tr.part.AddSound("decloak")  // decloakSound
+	tr.part.AddSound("collide")  // collideSound
 	return tr
 }
 
@@ -151,7 +149,7 @@ const (
 )
 
 // play the indicated sound.
-func (tr *trooper) play(index int) { tr.noise.Play(index) }
+func (tr *trooper) play(index int) { tr.part.PlaySound(index) }
 
 // fullHealth returns true if the player is at full health.
 func (tr *trooper) fullHealth() bool { return tr.neo != nil }

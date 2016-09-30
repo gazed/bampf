@@ -116,6 +116,7 @@ func (e *end) newAtom() {
 	cimg := e.atom.NewPov().SetScale(2, 2, 2)
 	model := cimg.NewModel("spinball", "msh:billboard")
 	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
+	model.ClampTex("ele").ClampTex("halo")
 	model.SetAlpha(0.6)
 
 	// create the electrons.

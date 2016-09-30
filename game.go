@@ -333,7 +333,6 @@ func (g *game) switchLevel(fo, fi *fadeLevelAnimation) {
 	g.cl.setBackgroundColour(1)
 	g.cl.center.SetScale(1, 1, 1)
 	m := g.cl.center.Model()
-	m.LoadTex(0, "drop1")
 	m.SetUniform("spin", 1.0)
 
 	// switch to the new level.
@@ -427,6 +426,7 @@ func (f *fadeLevelAnimation) Wrap() {
 	g := f.g
 	g.lens = &cam{}
 	g.cl.setHudVisible(true)
+	g.cl.body.Dispose(vu.PovBody) // Ensure body properly disposed when skipping.
 	g.cl.body.NewBody(vu.NewSphere(0.25))
 	g.cl.body.SetSolid(1, 0)
 	x, _, z := g.cl.cam.At()
