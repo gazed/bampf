@@ -54,26 +54,26 @@ def buildBinary(flags):
         version = subprocess.check_output(shlex.split('git describe')).strip()
     except subprocess.CalledProcessError:
         version = 'v0.0'
-    command = 'go build -ldflags "-s -X main.version '+version+' '+flags+'" -o target/bampf.raw bampf'
+    command = 'go build -ldflags "-s -X main.version='+version+' '+flags+'" -o target/bampf.raw bampf'
     out, err = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
     print('built binary with command: ' + command)
 
-def zipResources():
+def zipAssets():
     # zip the resources and include them with the binary.
     # chdir to get resource file zip proper names.
     cwd = os.getcwd()
     os.chdir('..')
-    subprocess.call(['zip', 'resources.zip']+glob.glob('models/*')+glob.glob('source/*')+
+    subprocess.call(['zip', 'assets.zip']+glob.glob('models/*')+glob.glob('source/*')+
             glob.glob('images/*')+glob.glob('audio/*'))
     os.chdir(cwd)
-    shutil.move('../resources.zip', 'target/resources.zip')
+    shutil.move('../assets.zip', 'target/assets.zip')
 
 def buildOSX():
     print 'Building the osx application bundle.'
     buildBinary('-linkmode=external')
     subprocess.call(shlex.split('mv target/bampf.raw target/bampf'))
     subprocess.call(shlex.split('chmod +x target/bampf'))
-    zipResources()
+    zipAssets()
 
     # create the OSX application bundle directory structure.
     base = 'target/Bampf.app'
@@ -86,7 +86,7 @@ def buildOSX():
     # create the osx bundle by putting everything in the proper directories.
     subprocess.call(shlex.split('cp Info.plist target/Bampf.app/Contents/'))
     subprocess.call(shlex.split('cp target/bampf target/Bampf.app/Contents/MacOS/Bampf'))
-    subprocess.call(shlex.split('cp target/resources.zip target/Bampf.app/Contents/Resources/'))
+    subprocess.call(shlex.split('cp target/assets.zip target/Bampf.app/Contents/Resources/'))
     subprocess.call(shlex.split('cp bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns'))
 
     # Create a signed copy for self distribution.
@@ -121,9 +121,9 @@ def buildWindows():
     os.remove('../resources.syso')
 
     # combine the exe and the resources. Need to redirect output for cat to work.
-    zipResources()
+    zipAssets()
     with open('target/bampf', "w") as outfile:
-        subprocess.call(['cat', 'target/bampf.raw', 'target/resources.zip'], stdout=outfile)
+        subprocess.call(['cat', 'target/bampf.raw', 'target/assets.zip'], stdout=outfile)
     subprocess.call(shlex.split('zip -A target/bampf'))
     subprocess.call(shlex.split('mv target/bampf target/Bampf.exe'))
 

@@ -65,7 +65,8 @@ func (b *button) label(part *vu.Pov, keyCode int) {
 	if keysym := vu.Keysym(keyCode); keysym > 0 {
 		if b.banner == nil {
 			b.banner = part.NewPov().SetAt(float64(b.x), float64(b.y), 0)
-			b.banner.NewLabel("uv", "lucidiaSu22", "lucidiaSu22Black")
+			b.banner.NewLabel("uv", "lucidiaSu22")
+			b.banner.Model().StrColor(0, 0, 0)
 		}
 		if keyCode == 0 {
 			keyCode = vu.KSpace

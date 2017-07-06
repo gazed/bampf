@@ -195,7 +195,7 @@ func newXpbar(root *vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// add the xp bar text.
 	xp.hb = root.NewPov()
-	xp.hb.NewLabel("uv", "lucidiaSu22", "lucidiaSu22White")
+	xp.hb.NewLabel("uv", "lucidiaSu22")
 
 	// teleport energy background and foreground bars.
 	xp.tbg = root.NewPov()
@@ -205,7 +205,7 @@ func newXpbar(root *vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// the teleport bar text.
 	xp.tk = root.NewPov()
-	xp.tk.NewLabel("uv", "lucidiaSu18", "lucidiaSu18White")
+	xp.tk.NewLabel("uv", "lucidiaSu18")
 
 	// cloak energy background and foreground bars.
 	xp.cbg = root.NewPov()
@@ -215,7 +215,7 @@ func newXpbar(root *vu.Pov, screenWidth, screenHeight int) *xpbar {
 
 	// the cloak bar text.
 	xp.ck = root.NewPov()
-	xp.ck.NewLabel("uv", "lucidiaSu18", "lucidiaSu18White")
+	xp.ck.NewLabel("uv", "lucidiaSu18")
 	xp.resize(screenWidth, screenHeight)
 	return xp
 }
@@ -259,7 +259,7 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 	coresNeeded := (high - health) / gameCellGain[xp.tr.lvl-1]
 	coreCount := strconv.Itoa(maxCores-coresNeeded) + "/" + strconv.Itoa(maxCores)
 	xp.hb.Model().SetStr(coreCount)
-	xp.hbw = xp.hb.Model().StrWidth()
+	xp.hbw, _ = xp.hb.Model().StrSize()
 	xp.hb.SetAt(xp.cx-float64(xp.hbw/2), xp.cy*0.5, 0)
 
 	// turn on the warning colour if player has less than the starting amount of cores.

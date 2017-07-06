@@ -279,7 +279,7 @@ func (c *config) rollCredits() {
 		height := float64(45)
 		for _, credit := range credits {
 			banner := c.root.NewPov().SetAt(20, height, 0)
-			banner.NewLabel("uv", "lucidiaSu18", "lucidiaSu18White").SetStr(credit)
+			banner.NewLabel("uv", "lucidiaSu18").SetStr(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}
