@@ -1,7 +1,7 @@
 <!-- Copyright © 2013-2016 Galvanized Logic Inc.                       -->
 <!-- Use is governed by a BSD-style license found in the LICENSE file. -->
 
-#Bampf
+# Bampf
 
 Bampf is a simple 3D arcade style game. Collect energy cores in order to finish
 a level. Teleport (bampf) to safety or use cloaking abilities to avoid sentinels.
