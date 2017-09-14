@@ -23,10 +23,8 @@ import (
 func main() {
 	mp := &bampf{}
 	var err error
-	var x, y int
-	x, y, mp.ww, mp.wh, mp.mute = mp.prefs()
 	mp.setLogger(mp)
-	if err = vu.New(mp, "Bampf", x, y, mp.ww, mp.wh); err != nil {
+	if err = vu.Run(mp); err != nil {
 		logf("Failed to initialize engine %s", err)
 		return
 	}
@@ -62,6 +60,7 @@ type bampf struct {
 	active      screen     // Currently drawn screen (state).
 	eventq      *list.List // Game event queue.
 	mute        bool       // Track if the sound is on or off.
+	fullScreen  bool       // Track if the app is full screen.
 	ww, wh      int        // Application window size.
 	ani         *animator  // Handles short animations.
 	launchLevel int        // Choosen by the user on the launch screen.
@@ -82,6 +81,12 @@ type gameState func(int) gameState
 
 // create the game screens before the main action/update loop is started.
 func (mp *bampf) Create(eng vu.Eng, s *vu.State) {
+	var x, y int
+	x, y, mp.ww, mp.wh, mp.mute, mp.fullScreen = mp.prefs()
+	eng.Set(vu.Title("Bampf"), vu.Size(x, y, mp.ww, mp.wh))
+	if mp.fullScreen {
+		eng.Set(vu.ToggleFullScreen())
+	}
 	rand.Seed(time.Now().UnixNano())
 	mp.eng = eng
 	mp.ani = &animator{}
@@ -92,6 +97,13 @@ func (mp *bampf) Create(eng vu.Eng, s *vu.State) {
 	mp.active = mp.launch
 	mp.active.activate(screenActive)
 	eng.Set(vu.Color(1, 1, 1, 1)) // White as default background.
+
+	// create the noises needed by the trooper.
+	teleportSound = eng.AddSound("teleport")
+	fetchSound = eng.AddSound("fetch")
+	cloakSound = eng.AddSound("cloak")
+	decloakSound = eng.AddSound("decloak")
+	collideSound = eng.AddSound("collide")
 }
 
 // Update is a regular engine callback and is passed onto the currently
@@ -99,7 +111,7 @@ func (mp *bampf) Create(eng vu.Eng, s *vu.State) {
 // promptly.
 func (mp *bampf) Update(eng vu.Eng, in *vu.Input, s *vu.State) {
 	if in.Resized {
-		mp.resize(s.X, s.Y, s.W, s.H)
+		mp.resize(s.X, s.Y, s.W, s.H, s.Full)
 	}
 	if in.Focus {
 		mp.ani.animate(in.Dt)                 // run active animations
@@ -256,22 +268,23 @@ func (mp *bampf) skipAnimation() {
 }
 
 // resize adjusts all the screens to the current game window size.
-func (mp *bampf) resize(wx, wy, ww, wh int) {
+func (mp *bampf) resize(wx, wy, ww, wh int, fullScreen bool) {
 	mp.ww, mp.wh = ww, wh
 	mp.launch.resize(ww, wh)
 	mp.game.resize(ww, wh)
 	mp.end.resize(ww, wh)
 	mp.config.resize(ww, wh)
-	mp.setWindow(wx, wy, ww, wh)
+	mp.setWindow(wx, wy, ww, wh, fullScreen)
 }
 
 // prefs recovers the saved game preferences.
 // Resonable defaults are returned if no saved information was found.
-func (mp *bampf) prefs() (x, y, w, h int, mute bool) {
+func (mp *bampf) prefs() (x, y, w, h int, mute, full bool) {
 	x, y, w, h = 400, 100, 800, 600
 	saver := newSaver()
 	saver.restore()
 	mute = saver.Mute
+	full = saver.Full
 	if saver.X > 0 {
 		x = saver.X
 	}
@@ -289,10 +302,10 @@ func (mp *bampf) prefs() (x, y, w, h int, mute bool) {
 }
 
 // setWindow saves the window dimensions.
-func (mp *bampf) setWindow(x, y, width, height int) {
+func (mp *bampf) setWindow(x, y, width, height int, fullScreen bool) {
 	saver := newSaver()
 	saver.restore()
-	saver.persistWindow(x, y, width, height)
+	saver.persistWindow(x, y, width, height, fullScreen)
 }
 
 // setMute turns the game sound off or on and saves the mute setting.
@@ -370,6 +383,17 @@ func (a *area) center() (cx, cy float64) {
 }
 
 // area
+// ===========================================================================
+// game sounds.
+
+// Sounds, once loaded, can be played at any Pov location.
+// In this case the trooper.
+var teleportSound uint32
+var fetchSound uint32
+var cloakSound uint32
+var decloakSound uint32
+var collideSound uint32
+
 // ===========================================================================
 // game events
 

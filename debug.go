@@ -46,7 +46,7 @@ func (g *game) toggleFly() {
 		g.last.lx, g.last.ly, g.last.lz = g.cl.cam.At()
 		g.last.pitch = g.cl.cam.Pitch
 		g.last.yaw = g.cl.cam.Yaw
-		g.cl.body.Dispose(vu.PovBody)
+		g.cl.body.DisposeBody()
 		g.dir = g.cl.cam.Lookat()
 	} else {
 		g.lens.pitch = g.last.pitch
@@ -54,7 +54,7 @@ func (g *game) toggleFly() {
 		g.cl.cam.Pitch = g.last.pitch
 		g.cl.cam.Yaw = g.last.yaw
 		g.cl.cam.SetAt(g.last.lx, g.last.ly, g.last.lz)
-		g.cl.body.NewBody(vu.NewSphere(0.25))
+		g.cl.body.MakeBody(vu.Sphere(0.25))
 		g.cl.body.SetSolid(1, 0)
 		g.dir = g.cl.cam.Look
 	}

@@ -7,7 +7,6 @@ import (
 	"container/list"
 
 	"github.com/gazed/vu"
-	"github.com/gazed/vu/render"
 )
 
 // config is an overlay screen that presents the game options while pausing
@@ -17,22 +16,21 @@ import (
 //     game screen  : allows the user to map keys or quit the level.
 //     end screen   : allows the user to map keys or return to the start screen.
 type config struct {
-	area                      // Options fills up the full screen.
-	keys           []int      // Rebindable keys.
-	keysRebound    bool       // True if keys were changed.
-	cam            *vu.Camera // Camera created at init.
-	mp             *bampf     // Main program.
-	root           *vu.Pov    // Top of transform hierarchy for this screen.
-	bg             *vu.Pov    // Gray out the screen when options are up.
-	buttonGroup    *vu.Pov    // Part to group buttons.
-	buttons        []*button  // Option buttons.
-	buttonSize     int        // Width and height of each button.
-	restart        *button    // Quit level button.
-	back           *button    // Back to game button.
-	info           *button    // Info/credits button.
-	mute           *button    // Mute toggle.
-	creditList     []*vu.Pov  // The info model.
-	exitTransition int        // Transition to use when exiting config.
+	ui             *vu.Ent   // UI scene created at init.
+	area                     // Options fills up the full screen.
+	keys           []int     // Rebindable keys.
+	keysRebound    bool      // True if keys were changed.
+	mp             *bampf    // Main program.
+	bg             *vu.Ent   // Gray out the screen when options are up.
+	buttonGroup    *vu.Ent   // Part to group buttons.
+	buttons        []*button // Option buttons.
+	buttonSize     int       // Width and height of each button.
+	restart        *button   // Quit level button.
+	back           *button   // Back to game button.
+	info           *button   // Info/credits button.
+	mute           *button   // Mute toggle.
+	creditList     []*vu.Ent // The info model.
+	exitTransition int       // Transition to use when exiting config.
 }
 
 // options implements the screen interface.
@@ -43,12 +41,10 @@ func (c *config) activate(state int) {
 	switch state {
 	case screenActive:
 		c.keysRebound = false
-		c.root.Cull = false
-
-		// Draw the config screen over other overlays.
-		c.cam.Overlay = render.Overlay + 1
+		c.ui.Cull(false)
+		c.ui.SetOver(2) // Draw the config screen over other overlays.
 	case screenDeactive:
-		c.root.Cull = true
+		c.ui.Cull(true)
 	default:
 		logf("config state error")
 	}
@@ -122,12 +118,12 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c := &config{}
 	c.mp = mp
 	c.buttonSize = 64
-	c.root = mp.eng.Root().NewPov()
-	c.cam = c.root.NewCam().SetUI()
+	c.ui = mp.eng.AddScene().SetUI()
+	c.ui.Cam().SetClip(0, 10)
 	c.handleResize(ww, wh)
-	c.bg = c.root.NewPov().SetAt(float64(c.cx), float64(c.cy), 0)
+	c.bg = c.ui.AddPart().SetAt(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
-	c.bg.NewModel("alpha", "msh:square", "mat:tblack")
+	c.bg.MakeModel("alpha", "msh:square", "mat:tblack")
 	c.keys = []int{ // rebindable key defaults.
 		vu.KW, // forwards
 		vu.KS, // backwards
@@ -143,30 +139,29 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	// ensure that the game buttons always appear in the same location
 	// by mapping reaction ids to button positions.
 	c.buttons = make([]*button, len(c.keys))
-	c.buttonGroup = c.root.NewPov()
+	c.buttonGroup = c.ui.AddPart()
 	c.createButtons()
 
 	// create the non-mappable buttons.
 	sz := c.buttonSize
 	c.info = newButton(c.buttonGroup, sz/2, "info", rollCredits, nil)
-	c.info.position(30, 20) // bottom left corner
 	c.mute = newButton(c.buttonGroup, sz/2, "muteoff", toggleMute, nil)
-	c.mute.position(70, 20) // bottom left corner
+	c.mute.icon.Load("tex:muteon") // add second texture to button.
 	if c.mp.mute {
+		// TODO won't work if assets are not loaded.
 		c.mute.setIcon("muteon")
 	}
 	c.back = newButton(c.buttonGroup, sz/2, "back", toggleOptions, nil)
 	c.back.position(float64(c.w-20-c.back.w/2), 20) // bottom right corner
 	c.restart = newButton(c.buttonGroup, sz/2, "quit", quitLevel, nil)
 	c.restart.position(float64(c.cx), 20) // bottom center of screen.
-	c.root.Cull = true
+	c.ui.Cull(true)
 	return c
 }
 
 // handleResize repositions the visible elements when the user resizes the screen.
 func (c *config) handleResize(width, height int) {
 	c.x, c.y, c.w, c.h = 0, 0, width, height
-	c.cam.SetOrthographic(0, float64(c.w), 0, float64(c.h), 0, 10)
 	c.cx, c.cy = c.center()
 	if c.bg != nil {
 		c.bg.SetScale(float64(c.w), float64(c.h), 1)
@@ -214,10 +209,14 @@ func (c *config) layout() {
 		c.buttons[5].position(cx1+dy, cy-2*dy) // teleport
 	}
 	if c.restart != nil {
-		c.restart.position(float64(c.cx), 20) // bottom center of screen.
+		// top center of screen.
+		c.restart.position(float64(c.cx), float64(c.h)-20)
 	}
 	if c.back != nil {
-		c.back.position(float64(c.w-10-c.back.w/2), 20) // bottom right corner
+		// top right corner
+		c.back.position(float64(c.w-10-c.back.w/2), float64(c.h)-20)
+		c.info.position(30, float64(c.h)-20) // top left corner
+		c.mute.position(70, float64(c.h)-20) // top left corner
 	}
 }
 
@@ -275,17 +274,17 @@ func (c *config) rollCredits() {
 	info := "Bampf " + version
 	credits = append(credits, info)
 	if c.creditList == nil {
-		c.creditList = []*vu.Pov{}
+		c.creditList = []*vu.Ent{}
 		height := float64(45)
 		for _, credit := range credits {
-			banner := c.root.NewPov().SetAt(20, height, 0)
-			banner.NewLabel("uv", "lucidiaSu18").SetStr(credit)
+			banner := c.ui.AddPart().SetAt(20, height, 0)
+			banner.MakeLabel("uv", "lucidiaSu18").Typeset(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}
 	} else {
 		for _, banner := range c.creditList {
-			banner.Cull = !banner.Cull
+			banner.Cull(!banner.Culled())
 		}
 	}
 }

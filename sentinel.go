@@ -21,27 +21,27 @@ import (
 // sentinel tracks and moves one player enemy. The maze position information
 // is kept as x,y grid spots.
 type sentinel struct {
-	part   *vu.Pov   // Top level for model transforms.
-	model  *vu.Pov   // Simple model for initial levels.
-	center *vu.Pov   // Add some difference for later levels.
+	part   *vu.Ent   // Top level for model transforms.
+	model  *vu.Ent   // Simple model for initial levels.
+	center *vu.Ent   // Add some difference for later levels.
 	prev   *gridSpot // Sentinels previous location.
 	next   *gridSpot // Sentinels next location.
 	units  float64   // Maze scale factor
 }
 
 // newSentinel creates a player enemy.
-func newSentinel(part *vu.Pov, level, units int, fade float64) *sentinel {
+func newSentinel(part *vu.Ent, level, units int, fade float64) *sentinel {
 	s := &sentinel{}
 	s.part = part
 	s.units = float64(units)
 	s.part.SetAt(0, 0.5, 0)
 	if level > 0 {
-		s.center = s.part.NewPov().SetScale(0.125, 0.125, 0.125)
-		m := s.center.NewModel("flata", "msh:cube", "mat:tred")
+		s.center = s.part.AddPart().SetScale(0.125, 0.125, 0.125)
+		m := s.center.MakeModel("flata", "msh:cube", "mat:tred")
 		m.SetUniform("fd", fade)
 	}
-	s.model = part.NewPov()
-	m := s.model.NewModel("flata", "msh:cube", "mat:tblue")
+	s.model = part.AddPart()
+	m := s.model.MakeModel("flata", "msh:cube", "mat:tblue")
 	m.SetUniform("fd", fade)
 	return s
 }

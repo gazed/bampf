@@ -15,7 +15,7 @@ import (
 // coreControl tracks available core drop locations and regulates how fast
 // new cores appear.
 type coreControl struct {
-	cores   []*vu.Pov     // cores available to be collected.
+	cores   []*vu.Ent     // cores available to be collected.
 	tiles   []gridSpot    // core drop locations.
 	saved   []gridSpot    // remember the core drop locations for resets.
 	last    time.Time     // last time a core was dropped.
@@ -30,7 +30,7 @@ func newCoreControl(units int, ani *animator) *coreControl {
 	cc := &coreControl{}
 	cc.ani = ani
 	cc.units = float64(units)
-	cc.cores = []*vu.Pov{}
+	cc.cores = []*vu.Ent{}
 	cc.saved = []gridSpot{}
 	cc.tiles = []gridSpot{}
 	cc.spot = &gridSpot{}
@@ -64,7 +64,7 @@ func (cc *coreControl) dropSpot() (gridx, gridy int) {
 
 // dropCore creates a new core. Create it high so that it drops.
 // Return the x, z game location of the dropped core.
-func (cc *coreControl) dropCore(root *vu.Pov, fade float64, gridx, gridy int) (gamex, gamez float64) {
+func (cc *coreControl) dropCore(pov *vu.Ent, fade float64, gridx, gridy int) (gamex, gamez float64) {
 
 	// remove the dropped spot from the list of available spots.
 	removed := false // sanity check.
@@ -79,7 +79,7 @@ func (cc *coreControl) dropCore(root *vu.Pov, fade float64, gridx, gridy int) (g
 		logf("core.dropCore: failed to locate what should be a valid drop location")
 		return 0, 0
 	}
-	core := cc.createCore(root, fade)
+	core := cc.createCore(pov, fade)
 
 	// add the core to the list of dropped cores.
 	cc.cores = append(cc.cores, core)
@@ -96,9 +96,9 @@ func (cc *coreControl) remCore(index int) (gamex, gamez float64) {
 	cc.cores = append(cc.cores[:index], cc.cores[index+1:]...)
 
 	// remove the core from the display and minimap.
-	core.Dispose(vu.PovNode)
 	gamex, _, gamez = core.At()
 	gridx, gridy := toGrid(gamex, 0, gamez, cc.units)
+	core.Dispose()
 
 	// make the tile available for a new drop. Use the old core location.
 	cc.tiles = append(cc.tiles, gridSpot{gridx, gridy})
@@ -133,9 +133,9 @@ func (cc *coreControl) addDropAt(gridx, gridy int) {
 // level before transitioning to a new level.
 func (cc *coreControl) reset() {
 	for _, core := range cc.cores {
-		core.Dispose(vu.PovNode)
+		core.Dispose()
 	}
-	cc.cores = []*vu.Pov{}
+	cc.cores = []*vu.Ent{}
 	cc.tiles = []gridSpot{}
 	for _, spot := range cc.saved {
 		cc.tiles = append(cc.tiles, gridSpot{spot.x, spot.y})
@@ -144,13 +144,11 @@ func (cc *coreControl) reset() {
 
 // createCore makes the new core model.
 // Create a core image using a single multi-texture shader.
-func (cc *coreControl) createCore(root *vu.Pov, fade float64) *vu.Pov {
-	core := root.NewPov().SetScale(0.25, 0.25, 0.25)
-	model := core.NewModel("spinball", "msh:billboard")
-	model.Load("tex:ele", "tex:ele", "tex:halo", "tex:halo")
-	model.ClampTex("ele").ClampTex("halo")
-	model.SetAlpha(0.6)
-	model.SetUniform("fd", fade)
+func (cc *coreControl) createCore(core *vu.Ent, fade float64) *vu.Ent {
+	core.SetScale(0.25, 0.25, 0.25)
+	core.MakeModel("spinball", "msh:billboard", "tex:ele", "tex:halo")
+	core.Clamp("ele").Clamp("halo")
+	core.SetAlpha(0.6).SetUniform("fd", fade)
 	return core
 }
 
@@ -189,7 +187,7 @@ func toGrid(gamex, gamey, gamez, units float64) (gridx, gridy int) {
 
 // coreDropAnimation shows cores falling when they are first created.
 type coreDropAnimation struct {
-	core    *vu.Pov // core to animate.
+	core    *vu.Ent // core to animate.
 	x, y, z float64 // core location.
 	drop    float64 // the amount to fall each tick.
 	rest    float64 // final resting location.
@@ -210,7 +208,9 @@ func (ca *coreDropAnimation) Animate(dt float64) bool {
 	case 1:
 		if ca.ticks > 0 {
 			ca.y += ca.drop
-			ca.core.SetAt(ca.x, ca.y, ca.z)
+			if ca.core.Exists() {
+				ca.core.SetAt(ca.x, ca.y, ca.z)
+			}
 			ca.ticks--
 			return true // animation not done.
 		}
@@ -224,6 +224,8 @@ func (ca *coreDropAnimation) Animate(dt float64) bool {
 // Wrap finishes the core drop by ensuring the core is at its
 // final location.
 func (ca *coreDropAnimation) Wrap() {
-	ca.core.SetAt(ca.x, ca.rest, ca.z)
+	if ca.core.Exists() {
+		ca.core.SetAt(ca.x, ca.rest, ca.z)
+	}
 	ca.state = 2
 }

@@ -15,16 +15,16 @@ import (
 // level groups everything needed for a single level.
 // This includes the player, the sentinels, and the level map.
 type level struct {
-	mp        *bampf       // Main program.
-	root      *vu.Pov      // Top of local transform hierarchy.
-	cam       *vu.Camera   // Quick access to the scene camera.
+	scene     *vu.Ent      // 2D scene
+	cam       *vu.Camera   // Quick access to the 3D scene camera.
 	hd        *hud         // 2D information display for the stage.
+	mp        *bampf       // Main program.
 	num       int          // Level number.
 	gcx, gcy  int          // Grid level center.
-	center    *vu.Pov      // Center tile model.
-	walls     []*vu.Pov    // Walls.
-	floor     *vu.Pov      // Large invisible floor.
-	body      *vu.Pov      // Physics body for the player.
+	center    *vu.Ent      // Center tile model.
+	walls     []*vu.Ent    // Walls.
+	floor     *vu.Ent      // Large invisible floor.
+	body      *vu.Ent      // Physics body for the player.
 	player    *trooper     // Player size/shape for this stage.
 	sentries  []*sentinel  // Sentinels: player enemy AI's.
 	cc        *coreControl // Controls dropping cores on a stage.
@@ -52,10 +52,10 @@ func newLevel(g *game, levelNum int) *level {
 	lvl.units = 2
 	lvl.colour = 1.0
 	lvl.fov = 75
-	lvl.root = g.mp.eng.Root().NewPov()
-	lvl.cam = lvl.root.NewCam()
-	lvl.cam.Cull = vu.NewFrontCull(g.vr)
-	lvl.cam.SetPerspective(lvl.fov, float64(g.ww)/float64(g.wh), 0.1, 50)
+	lvl.scene = g.mp.eng.AddScene()
+	lvl.scene.SetCuller(vu.NewFrontCull(g.vr))
+	lvl.cam = lvl.scene.Cam()
+	lvl.cam.SetClip(0.1, 50).SetFov(lvl.fov)
 
 	// save everything as one game stage.
 	lvl.mp = g.mp
@@ -64,11 +64,11 @@ func newLevel(g *game, levelNum int) *level {
 	// create hud before player since player is drawn within hd.scene.
 	s := g.mp.eng.State()
 	lvl.hd = newHud(g.mp.eng, gameMuster[lvl.num], s.X, s.Y, s.W, s.H)
-	lvl.player = lvl.makePlayer(lvl.hd.root, lvl.num+1)
-	lvl.makeSentries(lvl.root, lvl.num)
+	lvl.player = lvl.makePlayer(lvl.hd.ui.AddPart(), lvl.num+1)
+	lvl.makeSentries(lvl.scene, lvl.num)
 
 	// create one large floor.
-	lvl.floor = lvl.root.NewPov().SetAt(0, 0.2, 0)
+	lvl.floor = lvl.scene.AddPart().SetAt(0, 0.2, 0)
 
 	// create a new layout for the stage.
 	plan := levelType[lvl.num]
@@ -76,13 +76,13 @@ func newLevel(g *game, levelNum int) *level {
 	plan.Generate(levelSize, levelSize)
 
 	// build and populate the floorplan
-	lvl.walls = []*vu.Pov{}
+	lvl.walls = []*vu.Ent{}
 	lvl.cc = newCoreControl(lvl.units, g.mp.ani)
-	lvl.buildFloorPlan(lvl.root, lvl.hd, plan)
+	lvl.buildFloorPlan(lvl.scene, lvl.hd, plan)
 	lvl.plan = plan
 
 	// set the intial player location.
-	lvl.body = lvl.root.NewPov().SetAt(4, 0.5, 10)
+	lvl.body = lvl.scene.AddPart().SetAt(4, 0.5, 10)
 
 	// start sentinels at the center of the stage.
 	for _, sentry := range lvl.sentries {
@@ -100,14 +100,12 @@ func (lvl *level) setHudVisible(isVisible bool) {
 
 // setVisible toggles the visibility of the entire level.
 func (lvl *level) setVisible(isVisible bool) {
-	lvl.root.Cull = !isVisible
+	lvl.scene.Cull(!isVisible)
 	lvl.hd.setVisible(isVisible)
 }
 
 // resize adjusts the level to the new window dimensions.
 func (lvl *level) resize(width, height int) {
-	ratio := float64(width) / float64(height)
-	lvl.cam.SetPerspective(lvl.fov, ratio, 0.1, 50)
 	lvl.hd.resize(width, height)
 }
 
@@ -176,10 +174,10 @@ func (lvl *level) deactivate() {
 
 	// remove the walls and floor from physics.
 	for _, wall := range lvl.walls {
-		wall.Dispose(vu.PovBody)
+		wall.DisposeBody()
 	}
-	lvl.floor.Dispose(vu.PovBody)
-	lvl.body.Dispose(vu.PovBody)
+	lvl.floor.DisposeBody()
+	lvl.body.DisposeBody()
 
 	// remove the cores.
 	lvl.cc.reset()
@@ -199,15 +197,15 @@ func (lvl *level) activate(hm healthMonitor) {
 	// ensure the walls and floor are added to the physics simulation.
 	for _, wall := range lvl.walls {
 		// set the walls collision shape based on (hand copied from) the .obj file.
-		wall.NewBody(vu.NewBox(1, 1, 1))
+		wall.MakeBody(vu.Box(1, 1, 1))
 		wall.SetSolid(0, 0)
 	}
-	lvl.floor.NewBody(vu.NewBox(100, 25, 100))
+	lvl.floor.MakeBody(vu.Box(100, 25, 100))
 	lvl.floor.SetSolid(0, 0.4)
 	lvl.floor.SetAt(0, -25, 0)
 
 	// add a physics body for the camera.
-	lvl.body.NewBody(vu.NewSphere(0.25))
+	lvl.body.MakeBody(vu.Sphere(0.25))
 	lvl.body.SetSolid(1, 0)
 }
 
@@ -217,7 +215,7 @@ func (lvl *level) wallTextureLabel(band int) string { return fmt.Sprintf("wall%d
 func (lvl *level) tileLabel(band int) string        { return fmt.Sprintf("tile%d0", band) }
 
 // buildFloorPlan creates the level layout.
-func (lvl *level) buildFloorPlan(root *vu.Pov, hd *hud, plan grid.Grid) {
+func (lvl *level) buildFloorPlan(scene *vu.Ent, hd *hud, plan grid.Grid) {
 	width, height := plan.Size()
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
@@ -226,19 +224,16 @@ func (lvl *level) buildFloorPlan(root *vu.Pov, hd *hud, plan grid.Grid) {
 			band := plan.Band(x, y) / 3
 			if x == width/2 && y == height/2 {
 				lvl.gcx, lvl.gcy = x, y // remember the maze center location
-				lvl.center = root.NewPov().SetAt(xc, 0, yc)
-				m := lvl.center.NewModel("uvra", "msh:tile", "tex:drop1")
-				m.SetAlpha(0.7)
-				m.SetUniform("spin", 1.0)
-				m.SetUniform("fd", lvl.fade)
+				lvl.center = scene.AddPart().SetAt(xc, 0, yc)
+				m := lvl.center.MakeModel("uvra", "msh:tile", "tex:drop1")
+				m.SetAlpha(0.7).SetUniform("spin", 1.0).SetUniform("fd", lvl.fade)
 			} else if plan.IsOpen(x, y) {
 
 				// the floor tiles.
 				tileLabel := lvl.tileLabel(band)
-				tile := root.NewPov().SetAt(xc, 0, yc)
-				m := tile.NewModel("uva", "msh:tile", "tex:"+tileLabel)
-				m.SetAlpha(0.7)
-				m.SetUniform("fd", lvl.fade)
+				tile := scene.AddPart().SetAt(xc, 0, yc)
+				m := tile.MakeModel("uva", "msh:tile", "tex:"+tileLabel)
+				m.SetAlpha(0.7).SetUniform("fd", lvl.fade)
 
 				// remember the tile locations for drop spots inside the maze.
 				lvl.cc.addDropAt(x, y)
@@ -247,8 +242,8 @@ func (lvl *level) buildFloorPlan(root *vu.Pov, hd *hud, plan grid.Grid) {
 				// draw flat on the y plane with the maze extending into the screen.
 				wm := lvl.wallMeshLabel(band)
 				wt := lvl.wallTextureLabel(band)
-				wall := root.NewPov().SetAt(xc, 0, yc)
-				m := wall.NewModel("uva", "msh:"+wm, "tex:"+wt)
+				wall := scene.AddPart().SetAt(xc, 0, yc)
+				m := wall.MakeModel("uva", "msh:"+wm, "tex:"+wt)
 				m.SetUniform("fd", lvl.fade)
 				lvl.walls = append(lvl.walls, wall)
 
@@ -271,21 +266,20 @@ func (lvl *level) buildFloorPlan(root *vu.Pov, hd *hud, plan grid.Grid) {
 
 // makePlayer: the player is the camera... the player-trooper is used by the hud
 // to show player status and as such this trooper is part of the hud scene.
-func (lvl *level) makePlayer(root *vu.Pov, levelNum int) *trooper {
-	player := newTrooper(root.NewPov(), levelNum)
+func (lvl *level) makePlayer(pov *vu.Ent, levelNum int) *trooper {
+	player := newTrooper(pov, levelNum)
 	player.part.Spin(15, 0, 0)
 	player.part.Spin(0, 15, 0)
 	player.setScale(100)
-	player.part.SetListener()
 	return player
 }
 
 // makeSentries creates some AI sentinels.
-func (lvl *level) makeSentries(root *vu.Pov, levelNum int) {
+func (lvl *level) makeSentries(scene *vu.Ent, levelNum int) {
 	sentinels := []*sentinel{}
 	numSentinels := gameMuster[levelNum]
 	for cnt := 0; cnt < numSentinels; cnt++ {
-		sentry := newSentinel(root.NewPov(), levelNum, lvl.units, lvl.fade)
+		sentry := newSentinel(scene.AddPart(), levelNum, lvl.units, lvl.fade)
 		sentry.setScale(0.25)
 		sentinels = append(sentinels, sentry)
 	}
@@ -361,7 +355,7 @@ func (lvl *level) createCore() {
 	coresNeeded := energyNeeded / gameCellGain[lvl.num]
 	if lvl.cc.canDrop(coresNeeded) {
 		gridx, gridy := lvl.cc.dropSpot()
-		gamex, gamez := lvl.cc.dropCore(lvl.root, lvl.fade, gridx, gridy)
+		gamex, gamez := lvl.cc.dropCore(lvl.scene.AddPart(), lvl.fade, gridx, gridy)
 		lvl.hd.addCore(gamex, gamez)
 	}
 }
@@ -371,11 +365,11 @@ func (lvl *level) createCore() {
 // their original values in case the player has lost sight of the maze.
 func (lvl *level) teleport() {
 	if lvl.player.teleport() {
-		lvl.body.Dispose(vu.PovBody)
+		lvl.body.DisposeBody()
 		lvl.body.SetAt(0, 0.5, 10)
 		lvl.body.SetView(lin.QI)
 		lvl.cam.SetAt(0, 0.5, 10)
-		lvl.body.NewBody(vu.NewSphere(0.25))
+		lvl.body.MakeBody(vu.Sphere(0.25))
 		lvl.body.SetSolid(1, 0)
 		lvl.mp.ani.addAnimation(lvl.newTeleportAnimation())
 	}

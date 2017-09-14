@@ -1,5 +1,3 @@
-#version 330
-
 layout(location=0) in vec4 in_v;  // vertex coordinates
 layout(location=2) in vec2 in_t;  // texture coordinates
 

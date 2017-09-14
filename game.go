@@ -172,7 +172,7 @@ func (g *game) setDebugProcessor(gi interface{}) func(*vu.Input) {
 	if fn, ok := gi.(interface {
 		processDebugInput(*vu.Input)
 	}); ok {
-		return fn.processDebugInput // debuggin is on.
+		return fn.processDebugInput // debugging is on.
 	}
 	return func(in *vu.Input) {} // debugging is off.
 }
@@ -227,6 +227,7 @@ func (g *game) limitWandering(down int) {
 			body.Rest()
 		}
 	}
+	g.cl.player.part.SetListener()
 }
 
 // Player movement handlers.
@@ -331,9 +332,7 @@ func (g *game) newEvolveAnimation(dir int) animation {
 // and then switches to the next level.
 func (g *game) switchLevel(fo, fi *fadeLevelAnimation) {
 	g.cl.setBackgroundColour(1)
-	g.cl.center.SetScale(1, 1, 1)
-	m := g.cl.center.Model()
-	m.SetUniform("spin", 1.0)
+	g.cl.center.SetScale(1, 1, 1).SetUniform("spin", 1.0)
 
 	// switch to the new level.
 	g.setLevel(g.cl.num + fo.dir)
@@ -366,7 +365,7 @@ func (f *fadeLevelAnimation) Animate(dt float64) bool {
 	case 0:
 		g := f.g
 		g.evolving = true
-		g.cl.body.Dispose(vu.PovBody)
+		g.cl.body.DisposeBody()
 		x, z := 4.0, 10.0 // standard starting spot.
 		if f.out {
 
@@ -426,8 +425,8 @@ func (f *fadeLevelAnimation) Wrap() {
 	g := f.g
 	g.lens = &cam{}
 	g.cl.setHudVisible(true)
-	g.cl.body.Dispose(vu.PovBody) // Ensure body properly disposed when skipping.
-	g.cl.body.NewBody(vu.NewSphere(0.25))
+	g.cl.body.DisposeBody()
+	g.cl.body.MakeBody(vu.Sphere(0.25))
 	g.cl.body.SetSolid(1, 0)
 	x, _, z := g.cl.cam.At()
 	g.cl.cam.SetAt(x, 0.5, z)

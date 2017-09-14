@@ -13,13 +13,12 @@ import (
 // application launches. The start screen allows the user to change options and
 // to choose the game difficulty before starting to play.
 type launch struct {
+	ui         *vu.Ent         // Group of 2D model objects.
 	area                       // The launch screen fills up the game window.
-	root       *vu.Pov         //
-	cam        *vu.Camera      // Group of model objects for the start screen.
 	anim       *startAnimation // The start button animation.
 	buttons    []*button       // The game select and option screen buttons.
-	bg1        *vu.Pov         // Background rotating one way.
-	bg2        *vu.Pov         // Background rotating the other way.
+	bg1        *vu.Ent         // Background rotating one way.
+	bg2        *vu.Ent         // Background rotating the other way.
 	buttonSize int             // Width and height of each button.
 	mp         *bampf          // Needed for toggling the option screen.
 	evolving   bool            // True when player is moving between levels.
@@ -33,10 +32,10 @@ func (l *launch) activate(state int) {
 	switch state {
 	case screenActive:
 		l.anim.scale = 200
-		l.root.Cull = false
+		l.ui.Cull(false)
 		l.evolving = false
 	case screenDeactive:
-		l.root.Cull = true
+		l.ui.Cull(true)
 		l.evolving = false
 	case screenEvolving:
 		l.evolving = true
@@ -98,27 +97,25 @@ func (l *launch) processEvents(eventq *list.List) (transition int) {
 func newLaunchScreen(mp *bampf) *launch {
 	l := &launch{}
 	l.mp = mp
-	l.root = mp.eng.Root().NewPov()
-	l.cam = l.root.NewCam().SetUI()
+	l.ui = mp.eng.AddScene().SetUI()
+	l.ui.Cam().SetClip(0, 10)
 	l.setSize(mp.eng.State().Screen())
 	l.buttonSize = 64
 
 	// create the background.
-	l.bg1 = l.root.NewPov()
-	m := l.bg1.NewModel("uv", "msh:icon", "tex:backdrop")
-	m.SetAlpha(0.5)
-	m.SetUniform("spin", 10.0)
-	l.bg2 = l.root.NewPov()
-	m = l.bg2.NewModel("uv", "msh:icon", "tex:backdrop")
-	m.SetAlpha(0.5)
-	m.SetUniform("spin", -10.0)
+	l.bg1 = l.ui.AddPart()
+	m := l.bg1.MakeModel("uv", "msh:icon", "tex:backdrop")
+	m.SetAlpha(0.5).SetUniform("spin", 10.0)
+	l.bg2 = l.ui.AddPart()
+	m = l.bg2.MakeModel("uv", "msh:icon", "tex:backdrop")
+	m.SetAlpha(0.5).SetUniform("spin", -10.0)
 
 	// add the animated start button to the scene.
-	l.anim = newStartAnimation(mp, l.root.NewPov(), l.w, l.h)
+	l.anim = newStartAnimation(mp, l.ui.AddPart(), l.w, l.h)
 
 	// create the other buttons. Note that the names, eg. "lvl0",
 	// are the icon image names.
-	buttonPart := l.root.NewPov()
+	buttonPart := l.ui.AddPart()
 	sz := int(l.buttonSize)
 	l.buttons = []*button{
 		newButton(buttonPart, sz, "lvl0", pickLevel, 0),
@@ -136,7 +133,7 @@ func newLaunchScreen(mp *bampf) *launch {
 
 	// start the button animation.
 	l.mp.ani.addAnimation(l.newButtonAnimation())
-	l.root.Cull = true
+	l.ui.Cull(true)
 	return l
 }
 
@@ -162,7 +159,6 @@ func (l *launch) handleResize(width, height int) {
 // setSize adjusts the start screen dimensions.
 func (l *launch) setSize(x, y, width, height int) {
 	l.x, l.y, l.w, l.h = 0, 0, width, height
-	l.cam.SetOrthographic(0, float64(l.w), 0, float64(l.h), 0, 10)
 	l.cx, l.cy = l.center()
 }
 
@@ -225,14 +221,14 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 			btn.setVisible(false)
 		}
 		f.l.activate(screenEvolving)
-		f.l.anim.hilite.Model().SetAlpha(0.0)
+		f.l.anim.hilite.SetAlpha(0.0)
 		f.state = 1
 		return true
 	case 1:
 		f.l.anim.scale -= 200 / float64(f.ticks)
-		alpha := f.l.bg1.Model().Alpha() - float64(0.5)/float64(f.ticks)
-		f.l.bg1.Model().SetAlpha(alpha)
-		f.l.bg2.Model().SetAlpha(alpha)
+		alpha := f.l.bg1.Alpha() - float64(0.5)/float64(f.ticks)
+		f.l.bg1.SetAlpha(alpha)
+		f.l.bg2.SetAlpha(alpha)
 		if f.tkcnt >= f.ticks {
 			f.Wrap()
 			return false // animation done.
@@ -248,9 +244,9 @@ func (f *fadeStartAnimation) Animate(dt float64) bool {
 // back to what they were (so that others using the same material aren't
 // affected).
 func (f *fadeStartAnimation) Wrap() {
-	f.l.anim.hilite.Model().SetAlpha(0.3)
-	f.l.bg1.Model().SetAlpha(0.5)
-	f.l.bg2.Model().SetAlpha(0.5)
+	f.l.anim.hilite.SetAlpha(0.3)
+	f.l.bg1.SetAlpha(0.5)
+	f.l.bg2.SetAlpha(0.5)
 	f.state = 2
 	f.l.activate(screenDeactive)
 	for _, btn := range f.l.buttons {
@@ -329,21 +325,21 @@ func (ba *buttonAnimation) Wrap() {
 // normal animation as it is also used as the game start button.
 type startAnimation struct {
 	area            // Start animation acts like a button.
-	parent *vu.Pov  // Parent part of the player.
+	parent *vu.Ent  // Parent part of the player.
 	cx, cy float64  // Center of the area.
 	player *trooper // Player can be new or saved.
-	hilite *vu.Pov  // Hover overlay.
+	hilite *vu.Ent  // Hover overlay.
 	scale  float64  // Controls the animation size.
 }
 
 // newStartAnimation creates the start screen animation.
-func newStartAnimation(mp *bampf, parent *vu.Pov, screenWidth, screenHeight int) *startAnimation {
+func newStartAnimation(mp *bampf, parent *vu.Ent, screenWidth, screenHeight int) *startAnimation {
 	sa := &startAnimation{}
 	sa.parent = parent
 	sa.scale = 200
-	sa.hilite = parent.NewPov()
-	sa.hilite.NewModel("alpha", "msh:square", "mat:white")
-	sa.hilite.Cull = true
+	sa.hilite = parent.AddPart()
+	sa.hilite.MakeModel("alpha", "msh:square", "mat:white")
+	sa.hilite.Cull(true)
 	sa.resize(screenWidth, screenHeight)
 	sa.showLevel(0)
 	return sa
@@ -354,7 +350,7 @@ func (sa *startAnimation) showLevel(level int) {
 	if sa.player != nil {
 		sa.player.trash()
 	}
-	sa.player = newTrooper(sa.parent.NewPov(), level)
+	sa.player = newTrooper(sa.parent.AddPart(), level)
 	sa.player.part.Spin(15, 0, 0)
 	sa.player.part.Spin(0, 0, 15)
 	sa.player.setScale(sa.scale)
@@ -391,9 +387,9 @@ func (sa *startAnimation) clicked(mx, my int) bool {
 
 // hover shows the hover part when the mouse is over the start button.
 func (sa *startAnimation) hover(mx, my int) {
-	sa.hilite.Cull = true
+	sa.hilite.Cull(true)
 	if mx >= sa.x && mx <= sa.x+sa.w && my >= sa.y && my <= sa.y+sa.h {
-		sa.hilite.Cull = false
+		sa.hilite.Cull(false)
 	}
 }
 

@@ -1,5 +1,3 @@
-#version 330
-
 uniform float time;   // current time in seconds
 uniform vec2  screen; // viewport size
 uniform float alpha;  // transparency

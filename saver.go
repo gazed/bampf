@@ -19,6 +19,7 @@ type Saver struct {
 	Kbinds     []int  // Key bindings.
 	X, Y, W, H int    // Window location.
 	Mute       bool   // True if the game is muted.
+	Full       bool   // True if the game is fullscreen.
 }
 
 // newSaver creates default persistent application state. The directory
@@ -47,9 +48,13 @@ func (s *Saver) persistBindings(keys []int) {
 
 // persistWindow saves the new window location and size, while preserving
 // the other information.
-func (s *Saver) persistWindow(x, y, w, h int) {
+func (s *Saver) persistWindow(x, y, w, h int, fullScreen bool) {
 	s.restore()
-	s.X, s.Y, s.W, s.H = x, y, w, h
+	s.Full = fullScreen
+	if !s.Full {
+		// only save dimensions when not full screen.
+		s.X, s.Y, s.W, s.H = x, y, w, h
+	}
 	s.persist()
 }
 

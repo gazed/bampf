@@ -1,5 +1,3 @@
-#version 330
-
 in      vec4  v_c; // color from vertex shader
 uniform float fd;  // fade distance
 out     vec4  ffc; // final fragment colour

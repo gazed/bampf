@@ -1,5 +1,3 @@
-#version 330
-
 in      vec2      t_uv;
 uniform sampler2D uv;
 uniform float     fd;    // fade distance

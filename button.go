@@ -15,11 +15,11 @@ type button struct {
 	id        string      // Button unique name.
 	eventID   int         // game event identifier.
 	eventData interface{} // game event data.
-	icon      *vu.Pov     // Button image.
-	hilite    *vu.Pov     // Hover overlay.
-	banner    *vu.Pov     // Label for the action associated with the button.
+	icon      *vu.Ent     // Button image.
+	hilite    *vu.Ent     // Hover overlay.
+	banner    *vu.Ent     // Label for the action associated with the button.
 	cx, cy    float64     // Button center location.
-	model     *vu.Pov     // Holds button 3D model. Used for transforms.
+	model     *vu.Ent     // Holds button 3D model. Used for transforms.
 }
 
 // newButton creates a button. Buttons are initialized with a size and repositioned later.
@@ -27,51 +27,50 @@ type button struct {
 //   size   is both the width and height.
 //   icon   is the (already loaded) texture image.
 //   action is the action to perform when the button is pressed.
-func newButton(root *vu.Pov, size int, icon string, eventID int, eventData interface{}) *button {
+func newButton(root *vu.Ent, size int, icon string, eventID int, eventData interface{}) *button {
 	btn := &button{}
-	btn.model = root.NewPov()
+	btn.model = root.AddPart()
 	btn.eventID = eventID
 	btn.eventData = eventData
 	btn.w, btn.h = size, size
 
 	// create the button icon.
 	btn.id = icon
-	btn.icon = btn.model.NewPov().SetScale(float64(btn.w/2), float64(btn.h/2), 1)
-	btn.icon.NewModel("uv", "msh:icon", "tex:"+icon).SetAlpha(0.5)
+	btn.icon = btn.model.AddPart().SetScale(float64(btn.w/2), float64(btn.h/2), 1)
+	btn.icon.MakeModel("uv", "msh:icon", "tex:"+icon)
+	btn.icon.SetAlpha(0.5)
 
 	// create a hilite that is only shown on mouse over.
-	btn.hilite = btn.model.NewPov().SetScale(float64(btn.w/2.0), float64(btn.h/2.0), 1)
-	btn.hilite.Cull = true
-	btn.hilite.NewModel("alpha", "msh:square", "mat:tblue")
+	btn.hilite = btn.model.AddPart().SetScale(float64(btn.w/2.0), float64(btn.h/2.0), 1)
+	btn.hilite.Cull(true)
+	btn.hilite.MakeModel("alpha", "msh:square", "mat:tblue")
 	return btn
 }
 
 // setVisible hides and disables the button.
-func (b *button) setVisible(visible bool) { b.model.Cull = !visible }
+func (b *button) setVisible(visible bool) { b.model.Cull(!visible) }
 
 // setIcon changes the buttons icon.
-func (b *button) setIcon(icon string) {
-	b.icon.Model().OrderTex(icon, 0)
-}
+func (b *button) setIcon(icon string) { b.icon.SetFirst(icon) }
 
 // clicked returns true if the button was clicked.
 func (b *button) clicked(mx, my int) bool {
-	return !b.model.Cull && mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h
+	return !b.model.Culled() && mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h
 }
 
 // label adds a banner to a button or updates the banner if there is
 // an existing banner.
-func (b *button) label(part *vu.Pov, keyCode int) {
-	if keysym := vu.Keysym(keyCode); keysym > 0 {
+func (b *button) label(part *vu.Ent, keyCode int) {
+	if keysym := vu.Symbol(keyCode); keysym > 0 {
 		if b.banner == nil {
-			b.banner = part.NewPov().SetAt(float64(b.x), float64(b.y), 0)
-			b.banner.NewLabel("uv", "lucidiaSu22")
-			b.banner.Model().StrColor(0, 0, 0)
+			b.banner = part.AddPart().SetAt(float64(b.x), float64(b.y), 0)
+			b.banner.MakeLabel("uv", "lucidiaSu22")
+			b.banner.SetColor(0, 0, 0)
 		}
 		if keyCode == 0 {
 			keyCode = vu.KSpace
 		}
-		b.banner.Model().SetStr(string(keysym))
+		b.banner.Typeset(string(keysym))
 	}
 }
 
@@ -90,9 +89,9 @@ func (b *button) position(cx, cy float64) {
 
 // hover hilights the button when the mouse is over it.
 func (b *button) hover(mx, my int) bool {
-	b.hilite.Cull = true
+	b.hilite.Cull(true)
 	if mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h {
-		b.hilite.Cull = false
+		b.hilite.Cull(false)
 		return true
 	}
 	return false
