@@ -123,7 +123,7 @@ func newConfigScreen(mp *bampf, keys []int, ww, wh int) *config {
 	c.handleResize(ww, wh)
 	c.bg = c.ui.AddPart().SetAt(float64(c.cx), float64(c.cy), 0)
 	c.bg.SetScale(float64(c.w), float64(c.h), 1)
-	c.bg.MakeModel("alpha", "msh:square", "mat:tblack")
+	c.bg.MakeModel("colored", "msh:square", "mat:tblack")
 	c.keys = []int{ // rebindable key defaults.
 		vu.KW, // forwards
 		vu.KS, // backwards
@@ -278,7 +278,7 @@ func (c *config) rollCredits() {
 		height := float64(45)
 		for _, credit := range credits {
 			banner := c.ui.AddPart().SetAt(20, height, 0)
-			banner.MakeLabel("uv", "lucidiaSu18").Typeset(credit)
+			banner.MakeLabel("labeled", "lucidiaSu18").SetStr(credit)
 			height += 18
 			c.creditList = append(c.creditList, banner)
 		}

@@ -1,7 +1,7 @@
-uniform float time;   // current time in seconds
-uniform vec2  screen; // viewport size
-uniform float alpha;  // transparency
-out     vec4  ffc;    // final fragment colour
+uniform float time;    // current time in seconds
+uniform vec2  screen;  // viewport size
+uniform float alpha;   // transparency
+out     vec4  f_color; // final fragment colour
 
 const float Pi     = 3.14159;
 const float fScale = 4.3;
@@ -18,6 +18,6 @@ void main()  {
    vec3 col = vec3(0.5*sin(3.0*p.x)+0.5,0.5*sin(3.0*p.y)+0.5,sin(p.x+p.y));
    vec3 lum = vec3(0.299,0.587,0.114);
    vec3 c = vec3(dot(col*0.2,lum));
-   ffc = vec4(c, 1.0);
-   ffc.a = ffc.a*alpha;
+   f_color = vec4(c, 1.0);
+   f_color.a = f_color.a*alpha;
 }

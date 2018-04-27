@@ -1,9 +1,9 @@
-in      vec2      t_uv;
+in      vec2      v_t;     // interpolated textured coordinates.
 uniform sampler2D uv0;
 uniform sampler2D uv1;
 uniform float     time;
-uniform float     fd;   // fade distance
-out     vec4      ffc;
+uniform float     fd;      // fade distance
+out     vec4      f_color;
 
 // sping calculates rotated uv coordinates.
 vec2 spin(vec2 coords, float now, float rotSpeed) {
@@ -21,11 +21,11 @@ float fade(float distance) {
 }
 
 void main() {
-   vec4 t0 = texture(uv0, spin(t_uv, time, 1));
-   vec4 t1 = texture(uv0, spin(t_uv, time, -0.75));
-   vec4 t2 = texture(uv1, spin(t_uv, time, 1.5));
-   vec4 t3 = texture(uv1, spin(t_uv, time, -2));
-   ffc = mix(mix(t0, t1, 0.5), mix(t2, t3, 0.5), 0.5);
-   ffc.a = ffc.a*fade(fd);
+   vec4 t0 = texture(uv0, spin(v_t, time, 1));
+   vec4 t1 = texture(uv0, spin(v_t, time, -0.75));
+   vec4 t2 = texture(uv1, spin(v_t, time, 1.5));
+   vec4 t3 = texture(uv1, spin(v_t, time, -2));
+   f_color = mix(mix(t0, t1, 0.5), mix(t2, t3, 0.5), 0.5);
+   f_color.a = f_color.a*fade(fd);
 }
 

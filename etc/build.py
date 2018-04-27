@@ -36,7 +36,7 @@ def cleanProject():
 
 def lintProject():
     # expects golint executable in $PATH
-    subprocess.call(shlex.split('golint bampf'))
+    run('golint bampf')
 
 def buildProject():
     # Builds executable.
@@ -49,7 +49,7 @@ def buildProject():
 
 def buildBinary(flags):
     print 'Building executable'
-    subprocess.call(shlex.split('go fmt bampf'))
+    run('go fmt bampf')
     try:
         version = subprocess.check_output(shlex.split('git describe')).strip()
     except subprocess.CalledProcessError:
@@ -64,15 +64,15 @@ def zipAssets():
     cwd = os.getcwd()
     os.chdir('..')
     subprocess.call(['zip', 'assets.zip']+glob.glob('models/*')+glob.glob('source/*')+
-            glob.glob('images/*')+glob.glob('audio/*'))
+                    glob.glob('images/*')+glob.glob('audio/*'))
     os.chdir(cwd)
     shutil.move('../assets.zip', 'target/assets.zip')
 
 def buildOSX():
     print 'Building the osx application bundle.'
     buildBinary('-linkmode=external')
-    subprocess.call(shlex.split('mv target/bampf.raw target/bampf'))
-    subprocess.call(shlex.split('chmod +x target/bampf'))
+    run('mv target/bampf.raw target/bampf')
+    run('chmod +x target/bampf')
     zipAssets()
 
     # create the OSX application bundle directory structure.
@@ -84,37 +84,37 @@ def buildOSX():
     os.makedirs(base + '/Resources')
 
     # create the osx bundle by putting everything in the proper directories.
-    subprocess.call(shlex.split('cp Info.plist target/Bampf.app/Contents/'))
-    subprocess.call(shlex.split('cp target/bampf target/Bampf.app/Contents/MacOS/Bampf'))
-    subprocess.call(shlex.split('cp target/assets.zip target/Bampf.app/Contents/Resources/'))
-    subprocess.call(shlex.split('cp bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns'))
+    run('cp Info.plist target/Bampf.app/Contents/')
+    run('cp target/bampf target/Bampf.app/Contents/MacOS/Bampf')
+    run('cp target/assets.zip target/Bampf.app/Contents/Resources/')
+    run('cp bampf.icns target/Bampf.app/Contents/Resources/Bampf.icns')
 
     # Create a signed copy for self distribution.
     if os.path.exists('target/dist'):
         shutil.rmtree('target/dist')
     os.makedirs('target/dist')
-    subprocess.call(shlex.split('cp -r target/Bampf.app target/dist/Bampf.app'))
-    signOsx('target/dist', '"Developer ID Application: XXX"', '"Developer ID Installer: Paul Ruest"')
+    run('cp -r target/Bampf.app target/dist/Bampf.app')
+    pkgOSX('target/dist', '"Developer ID Application: XXX"', '"Developer ID Installer: Paul Ruest"')
 
     # Create a signed copy for app store submission.
     if os.path.exists('target/app'):
         shutil.rmtree('target/app')
     os.makedirs('target/app')
-    subprocess.call(shlex.split('cp -r target/Bampf.app target/app/Bampf.app'))
-    signOsx('target/app', '"3rd Party Mac Developer Application: Galvanized Logic Inc."',
+    run('cp -r target/Bampf.app target/app/Bampf.app')
+    pkgOSX('target/app', '"3rd Party Mac Developer Application: Galvanized Logic Inc."',
            '"3rd Party Mac Developer Installer: Galvanized Logic Inc."')
 
-def signOsx(outdir, akey, ikey):
-    subprocess.call(shlex.split('codesign --force --entitlements Entitlements.plist --sign '+
-        akey+' --timestamp=none '+outdir+'/Bampf.app'))
-    subprocess.call(shlex.split('productbuild --version 1.0 --sign '+ikey+' --component '+
-        outdir+'/Bampf.app /Applications '+outdir+'/Bampf.pkg'))
+def pkgOSX(outdir, akey, ikey):
+    run('codesign --force --entitlements Entitlements.plist --sign '+
+        akey+' --timestamp=none '+outdir+'/Bampf.app')
+    run('productbuild --version 1.0 --sign '+ikey+' --component '+
+        outdir+'/Bampf.app /Applications '+outdir+'/Bampf.pkg')
 
 def buildWindows():
     print 'Building windows'
 
     # create the icon resource to include with the binary.
-    subprocess.call(shlex.split('windres bampf.rc -O coff -o ../resources.syso'))
+    run('windres bampf.rc -O coff -o ../resources.syso')
 
     # build the raw binary and cleanup the generated icon (windows resource) file.
     buildBinary('-H windowsgui')
@@ -124,8 +124,12 @@ def buildWindows():
     zipAssets()
     with open('target/bampf', "w") as outfile:
         subprocess.call(['cat', 'target/bampf.raw', 'target/assets.zip'], stdout=outfile)
-    subprocess.call(shlex.split('zip -A target/bampf'))
-    subprocess.call(shlex.split('mv target/bampf target/Bampf.exe'))
+    run('zip -A target/bampf')
+    run('mv target/bampf target/Bampf.exe')
+
+def run(command):
+    # execute command in the shell.
+    subprocess.call(shlex.split(command))
 
 #------------------------------------------------------------------------------
 # Main program.

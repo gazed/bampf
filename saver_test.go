@@ -6,15 +6,18 @@ package main
 import (
 	"os"
 	"testing"
+
+    "github.com/gazed/vu"
 )
 
 func TestSaveRestore(t *testing.T) {
 	file := "gob"
 	s1 := newSaver()
 	s1.File = file
-	km := []string{"K", "M"}
+	km := []int{vu.KW, vu.KM}
+
 	s1.persistBindings(km)
-	s1.persistWindow(10, 20, 30, 40)
+	s1.persistWindow(10, 20, 30, 40, false)
 
 	// now restore the same file.
 	s2 := newSaver()

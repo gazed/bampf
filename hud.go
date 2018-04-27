@@ -86,7 +86,7 @@ func (hd *hud) update(c *vu.Camera, sentries []*sentinel) { hd.mm.update(c, sent
 // cloakingEffect creates the model shown when the user cloaks.
 func (hd *hud) cloakingEffect(ce *vu.Ent) *vu.Ent {
 	ce.Cull(true)
-	ce.MakeModel("uv", "msh:icon", "tex:cloakon")
+	ce.MakeModel("textured", "msh:icon", "tex:cloakon")
 	ce.SetAlpha(0.5)
 	return ce
 }
@@ -136,7 +136,7 @@ func newPlayer(pov *vu.Ent, screenWidth, screenHeight int) *player {
 	pl := &player{}
 	pl.cx, pl.cy = 100, 100
 	pl.bg = pov.SetScale(110, 110, 1).SetAt(pl.cx, pl.cy, 0)
-	pl.bg.MakeModel("uv", "msh:icon", "tex:hudbg")
+	pl.bg.MakeModel("textured", "msh:icon", "tex:hudbg")
 	return pl
 }
 
@@ -185,31 +185,31 @@ func newXpbar(scene *vu.Ent, screenWidth, screenHeight int) *xpbar {
 
 	// add the xp background and foreground bars.
 	xp.bg = scene.AddPart()
-	xp.bg.MakeModel("alpha", "msh:square", "mat:tgray")
+	xp.bg.MakeModel("colored", "msh:square", "mat:tgray")
 	xp.fg = scene.AddPart()
-	xp.fg.MakeModel("uv", "msh:icon", "tex:xpcyan", "tex:xpred")
+	xp.fg.MakeModel("textured", "msh:icon", "tex:xpcyan", "tex:xpred")
 
 	// add the xp bar text.
 	xp.hb = scene.AddPart()
-	xp.hb.MakeLabel("uv", "lucidiaSu22")
+	xp.hb.MakeLabel("labeled", "lucidiaSu22")
 
 	// teleport energy background and foreground bars.
 	xp.tbg = scene.AddPart()
-	xp.tbg.MakeModel("alpha", "msh:square", "mat:tgray")
+	xp.tbg.MakeModel("colored", "msh:square", "mat:tgray")
 	xp.tfg = scene.AddPart()
-	xp.tfg.MakeModel("uv", "msh:icon", "tex:xpblue", "tex:xpred")
+	xp.tfg.MakeModel("textured", "msh:icon", "tex:xpblue", "tex:xpred")
 
 	// the teleport bar text.
-	xp.tk = scene.AddPart().MakeLabel("uv", "lucidiaSu18")
+	xp.tk = scene.AddPart().MakeLabel("labeled", "lucidiaSu18")
 
 	// cloak energy background and foreground bars.
 	xp.cbg = scene.AddPart()
-	xp.cbg.MakeModel("alpha", "msh:square", "mat:tgray")
+	xp.cbg.MakeModel("colored", "msh:square", "mat:tgray")
 	xp.cfg = scene.AddPart()
-	xp.cfg.MakeModel("uv", "msh:icon", "tex:xpblue")
+	xp.cfg.MakeModel("textured", "msh:icon", "tex:xpblue")
 
 	// the cloak bar text.
-	xp.ck = scene.AddPart().MakeLabel("uv", "lucidiaSu18")
+	xp.ck = scene.AddPart().MakeLabel("labeled", "lucidiaSu18")
 	xp.resize(screenWidth, screenHeight)
 	return xp
 }
@@ -252,7 +252,7 @@ func (xp *xpbar) healthUpdated(health, warn, high int) {
 	maxCores := high / gameCellGain[xp.tr.lvl-1]
 	coresNeeded := (high - health) / gameCellGain[xp.tr.lvl-1]
 	coreCount := strconv.Itoa(maxCores-coresNeeded) + "/" + strconv.Itoa(maxCores)
-	xp.hb.Typeset(coreCount)
+	xp.hb.SetStr(coreCount)
 	xp.hbw, _ = xp.hb.Size()
 	xp.hb.SetAt(xp.cx-float64(xp.hbw/2), xp.cy*0.5, 0)
 
@@ -298,10 +298,10 @@ func (xp *xpbar) setLevel(lvl *level) {
 func (xp *xpbar) updateKeys(teleportKey, cloakKey int) {
 	if xp.tk != nil && xp.ck != nil {
 		if tsym := vu.Symbol(teleportKey); tsym > 0 {
-			xp.tk.Typeset(string(tsym))
+			xp.tk.SetStr(string(tsym))
 		}
 		if csym := vu.Symbol(cloakKey); csym > 0 {
-			xp.ck.Typeset(string(csym))
+			xp.ck.SetStr(string(csym))
 		}
 	}
 }
@@ -343,21 +343,21 @@ func newMinimap(eng vu.Eng, numTroops int) *minimap {
 	// add the white background to highlight player marker.
 	mm.bg = mm.root.AddPart().SetScale(110, 110, 1)
 	mm.bg = mm.root.AddPart().SetScale(110, 110, 1)
-	mm.bg.MakeModel("uv", "msh:icon", "tex:hudbg")
+	mm.bg.MakeModel("textured", "msh:icon", "tex:hudbg")
 
 	// create the sentinel position markers
 	mm.spms = []*vu.Ent{}
 	for cnt := 0; cnt < numTroops; cnt++ {
 		tpm := mm.root.AddPart()
-		tpm.MakeModel("alpha", "msh:square", "mat:tred")
+		tpm.MakeModel("colored", "msh:square", "mat:tred")
 		mm.spms = append(mm.spms, tpm)
 	}
 
 	// create the player marker and center map marker.
 	mm.cpm = mm.root.AddPart()
-	mm.cpm.MakeModel("alpha", "msh:square", "mat:blue")
+	mm.cpm.MakeModel("colored", "msh:square", "mat:blue")
 	mm.ppm = mm.root.AddPart()
-	mm.ppm.MakeModel("alpha", "msh:tri", "mat:tblack")
+	mm.ppm.MakeModel("colored", "msh:tri", "mat:tblack")
 	return mm
 }
 
@@ -390,7 +390,7 @@ func (mm *minimap) setLevel(cam *vu.Camera, lvl *level) {
 	mm.cx, mm.cy = float64(lvl.gcx*lvl.units), float64(lvl.gcy*lvl.units)
 	mm.ppm.SetAt(x, -z, 0)
 	mm.bg.SetAt(x, -z, 0)
-	mm.ppm.View().SetAa(0, 0, 1, lin.Rad(cam.Yaw))
+	mm.ppm.SetAa(0, 0, 1, lin.Rad(cam.Yaw))
 	mm.setSentryAt(lvl.sentries)
 	lvl.player.monitorHealth("mmap", mm)
 }
@@ -398,13 +398,13 @@ func (mm *minimap) setLevel(cam *vu.Camera, lvl *level) {
 // addWall adds a block representing a wall to the minimap.
 func (mm *minimap) addWall(x, y float64) {
 	wall := mm.root.AddPart().SetAt(x, -y, 0)
-	wall.MakeModel("alpha", "msh:square", "mat:gray")
+	wall.MakeModel("colored", "msh:square", "mat:gray")
 }
 
 // addCore adds a small block representing an energy core to the minimap.
 func (mm *minimap) addCore(gamex, gamez float64) {
 	cm := mm.root.AddPart().SetAt(gamex, -gamez, 0).SetScale(0.5, 0.5, 1)
-	cm.MakeModel("alpha", "msh:square", "mat:green")
+	cm.MakeModel("colored", "msh:square", "mat:green")
 	mm.cores = append(mm.cores, cm)
 }
 
@@ -449,7 +449,7 @@ func (mm *minimap) update(cam *vu.Camera, sentries []*sentinel) {
 	mm.setCenterAt(x, -z)
 	mm.bg.SetAt(x, -z, 0)
 	mm.ppm.SetAt(x, -z, 0)
-	mm.ppm.View().SetAa(0, 0, 1, lin.Rad(cam.Yaw))
+	mm.ppm.SetAa(0, 0, 1, lin.Rad(cam.Yaw))
 	mm.setSentryAt(sentries)
 }
 

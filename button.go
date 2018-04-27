@@ -37,13 +37,13 @@ func newButton(root *vu.Ent, size int, icon string, eventID int, eventData inter
 	// create the button icon.
 	btn.id = icon
 	btn.icon = btn.model.AddPart().SetScale(float64(btn.w/2), float64(btn.h/2), 1)
-	btn.icon.MakeModel("uv", "msh:icon", "tex:"+icon)
+	btn.icon.MakeModel("textured", "msh:icon", "tex:"+icon)
 	btn.icon.SetAlpha(0.5)
 
 	// create a hilite that is only shown on mouse over.
 	btn.hilite = btn.model.AddPart().SetScale(float64(btn.w/2.0), float64(btn.h/2.0), 1)
 	btn.hilite.Cull(true)
-	btn.hilite.MakeModel("alpha", "msh:square", "mat:tblue")
+	btn.hilite.MakeModel("colored", "msh:square", "mat:tblue")
 	return btn
 }
 
@@ -64,13 +64,13 @@ func (b *button) label(part *vu.Ent, keyCode int) {
 	if keysym := vu.Symbol(keyCode); keysym > 0 {
 		if b.banner == nil {
 			b.banner = part.AddPart().SetAt(float64(b.x), float64(b.y), 0)
-			b.banner.MakeLabel("uv", "lucidiaSu22")
+			b.banner.MakeLabel("labeled", "lucidiaSu22")
 			b.banner.SetColor(0, 0, 0)
 		}
 		if keyCode == 0 {
 			keyCode = vu.KSpace
 		}
-		b.banner.Typeset(string(keysym))
+		b.banner.SetStr(string(keysym))
 	}
 }
 

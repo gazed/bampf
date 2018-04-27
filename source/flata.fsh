@@ -1,6 +1,6 @@
-in      vec4  v_c; // color from vertex shader
-uniform float fd;  // fade distance
-out     vec4  ffc; // final fragment colour
+in      vec4  v_c;     // color from vertex shader
+uniform float fd;      // fade distance
+out     vec4  f_color; // final fragment colour
 
 float fade(float distance) {
    float z = gl_FragCoord.z / gl_FragCoord.w / distance;
@@ -8,6 +8,6 @@ float fade(float distance) {
    return 1.0 - z;
 }
 void main() {
-   ffc = v_c;
-   ffc.a = ffc.a*fade(fd);
+   f_color = v_c;
+   f_color.a = f_color.a*fade(fd);
 }

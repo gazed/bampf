@@ -104,10 +104,10 @@ func newLaunchScreen(mp *bampf) *launch {
 
 	// create the background.
 	l.bg1 = l.ui.AddPart()
-	m := l.bg1.MakeModel("uv", "msh:icon", "tex:backdrop")
+	m := l.bg1.MakeModel("textured", "msh:icon", "tex:backdrop")
 	m.SetAlpha(0.5).SetUniform("spin", 10.0)
 	l.bg2 = l.ui.AddPart()
-	m = l.bg2.MakeModel("uv", "msh:icon", "tex:backdrop")
+	m = l.bg2.MakeModel("textured", "msh:icon", "tex:backdrop")
 	m.SetAlpha(0.5).SetUniform("spin", -10.0)
 
 	// add the animated start button to the scene.
@@ -338,7 +338,7 @@ func newStartAnimation(mp *bampf, parent *vu.Ent, screenWidth, screenHeight int)
 	sa.parent = parent
 	sa.scale = 200
 	sa.hilite = parent.AddPart()
-	sa.hilite.MakeModel("alpha", "msh:square", "mat:white")
+	sa.hilite.MakeModel("colored", "msh:square", "mat:white")
 	sa.hilite.Cull(true)
 	sa.resize(screenWidth, screenHeight)
 	sa.showLevel(0)
